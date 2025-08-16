@@ -3,7 +3,7 @@
  * Provides unified API for alerts, notifications, and dialogs
  */
 
-import { getPlatform, Platform } from './platform.ts';
+import { getPlatform, Platform } from '../standalone/platform.ts';
 
 /**
  * Escape string for shell command

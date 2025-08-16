@@ -2,8 +2,8 @@
  * Enhanced screen module with integrated screenshot functionality
  */
 
-import { exec } from './system.ts';
-import { getPlatform } from './platform.ts';
+import { exec } from '../standalone/system.ts';
+import { getPlatform } from '../standalone/platform.ts';
 import { notify } from './notification.ts';
 
 export interface CaptureOptions {

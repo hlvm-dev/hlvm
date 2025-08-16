@@ -3,15 +3,20 @@
 # Build HLVM binary
 cd "$(dirname "$0")/.."
 
-echo "Building HLVM binary..."
+echo "Building HLVM binary with embedded Deno and Ollama..."
 
 # Remove old binary if exists
 rm -f hlvm
 
-# Compile
+# Compile with embedded binaries
 ./resources/deno compile \
   --allow-all \
   --no-check \
+  --include resources/deno \
+  --include resources/ollama \
+  --include src/eval-proxy-server.ts \
+  --include src/hlvm-stdlib.ts \
+  --include src/modules \
   --output hlvm \
   --target x86_64-apple-darwin \
   src/hlvm-repl.ts

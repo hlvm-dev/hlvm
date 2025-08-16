@@ -10,7 +10,7 @@ const isMacOS = platform === "darwin";
 const isLinux = platform === "linux";
 
 // Import exec from system module for command execution
-import { exec } from "./system.ts";
+import { exec } from "../standalone/system.ts";
 
 /**
  * Modifier key options for keyboard operations

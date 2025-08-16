@@ -2,8 +2,8 @@
  * Mouse automation module
  */
 
-import { exec } from './system.ts';
-import { getPlatform, Platform } from './platform.ts';
+import { exec } from '../standalone/system.ts';
+import { getPlatform, Platform } from '../standalone/platform.ts';
 
 export interface MousePosition {
   x: number;

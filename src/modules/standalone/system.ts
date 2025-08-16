@@ -331,17 +331,23 @@ export function getHomedir(): string {
  * Get temporary directory
  */
 export function getTmpdir(): string {
-  // Try environment variables
+  // Try environment variables first (cross-platform)
   const tmp = env.get("TMPDIR") || env.get("TMP") || env.get("TEMP");
   if (tmp) {
     return tmp;
   }
 
-  // Platform defaults
+  // Platform-specific defaults
   if (isWindows) {
-    return env.get("USERPROFILE") + "\\AppData\\Local\\Temp" || "C:\\Temp";
+    const userProfile = env.get("USERPROFILE");
+    if (userProfile) {
+      return `${userProfile}\\AppData\\Local\\Temp`;
+    }
+    // Fallback for Windows
+    return "C:\\Windows\\Temp";
   }
 
+  // Unix-like systems
   return "/tmp";
 }
 
