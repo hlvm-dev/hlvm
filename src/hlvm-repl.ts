@@ -1,13 +1,12 @@
 #!/usr/bin/env -S deno run --allow-all
 
-// Extract embedded binaries to temp if running as compiled binary
+// HLVM REPL - Direct SQLite version (no proxy server needed)
+
 // Cross-platform temp directory
 function getTempDir(): string {
-  // Try environment variables first
   const envTemp = Deno.env.get("TMPDIR") || Deno.env.get("TEMP") || Deno.env.get("TMP");
   if (envTemp) return envTemp;
   
-  // Platform-specific defaults
   if (Deno.build.os === "windows") {
     const userProfile = Deno.env.get("USERPROFILE");
     if (userProfile) {
@@ -16,7 +15,6 @@ function getTempDir(): string {
     return "C:\\Windows\\Temp";
   }
   
-  // Unix-like systems (macOS, Linux, BSD, etc.)
   return "/tmp";
 }
 
@@ -56,7 +54,7 @@ async function extractBinary(name: string, targetPath: string, resourcePath: str
 const denoPath = await extractBinary('deno', DENO_PATH, '../resources/deno');
 const ollamaPath = await extractBinary('ollama', OLLAMA_PATH, '../resources/ollama');
 
-// Start services
+// Start Ollama service only (no proxy server needed!)
 const ollamaProcess = new Deno.Command(ollamaPath, {
   args: ["serve"],
   env: {
@@ -67,38 +65,68 @@ const ollamaProcess = new Deno.Command(ollamaPath, {
   stderr: "null",
 }).spawn();
 
-// Start eval-proxy server
-// When compiled, we need to extract and run the eval-proxy code
 // Check if running as compiled binary
-const isCompiled = denoPath === DENO_PATH; // If we extracted Deno, we're compiled
+const isCompiled = !import.meta.url.startsWith("file:///Users");
 
-let evalProxyProcess;
-if (isCompiled) {
-  // Write eval-proxy to temp and run it
-  const evalProxyPath = `${tempDir}${pathSep}hlvm-eval-proxy.ts`;
+// Copy init script and stdlib to temp for REPL to load
+const initScriptPath = `${tempDir}${pathSep}hlvm-init.js`;
+const stdlibPath = `${tempDir}${pathSep}stdlib`;
+
+// Always extract stdlib for compiled binary
+if (true) {  // Always extract to temp
+  // When compiled, extract all embedded files
   try {
-    const evalProxyCode = await Deno.readTextFile(new URL('./eval-proxy-server.ts', import.meta.url));
-    await Deno.writeTextFile(evalProxyPath, evalProxyCode);
-  } catch {
-    // Already exists or can't write, that's ok
+    // Create stdlib directory structure
+    await Deno.mkdir(stdlibPath, { recursive: true });
+    await Deno.mkdir(`${stdlibPath}${pathSep}core`, { recursive: true });
+    await Deno.mkdir(`${stdlibPath}${pathSep}fs`, { recursive: true });
+    await Deno.mkdir(`${stdlibPath}${pathSep}io`, { recursive: true });
+    await Deno.mkdir(`${stdlibPath}${pathSep}computer`, { recursive: true });
+    await Deno.mkdir(`${stdlibPath}${pathSep}ai`, { recursive: true });
+    await Deno.mkdir(`${stdlibPath}${pathSep}app`, { recursive: true });
+    
+    // Copy all stdlib modules to their organized locations
+    const stdlibModules = [
+      { path: 'core/platform.js', src: './stdlib/core/platform.js' },
+      { path: 'core/system.js', src: './stdlib/core/system.js' },
+      { path: 'core/database.js', src: './stdlib/core/database.js' },
+      { path: 'fs/filesystem.js', src: './stdlib/fs/filesystem.js' },
+      { path: 'io/clipboard.js', src: './stdlib/io/clipboard.js' },
+      { path: 'computer/notification.js', src: './stdlib/computer/notification.js' },
+      { path: 'computer/screen.js', src: './stdlib/computer/screen.js' },
+      { path: 'computer/keyboard.js', src: './stdlib/computer/keyboard.js' },
+      { path: 'computer/mouse.js', src: './stdlib/computer/mouse.js' },
+      { path: 'ai/ollama.js', src: './stdlib/ai/ollama.js' },
+      { path: 'app/control.js', src: './stdlib/app/control.js' }
+    ];
+    
+    for (const module of stdlibModules) {
+      const moduleCode = await Deno.readTextFile(new URL(module.src, import.meta.url));
+      await Deno.writeTextFile(`${stdlibPath}${pathSep}${module.path}`, moduleCode);
+    }
+    
+    // Copy bridge module to temp
+    const bridgeCode = await Deno.readTextFile(new URL('./hlvm-bridge.ts', import.meta.url));
+    await Deno.writeTextFile(`${tempDir}${pathSep}hlvm-bridge.ts`, bridgeCode);
+    
+    // Copy init script with corrected paths
+    let initCode = await Deno.readTextFile(new URL('./hlvm-init.js', import.meta.url));
+    // Fix import paths to use temp directory
+    initCode = initCode.replace(/from "\.\/stdlib\//g, `from "${stdlibPath}/`);
+    initCode = initCode.replace('"../src/hlvm-bridge.ts"', `"${tempDir}${pathSep}hlvm-bridge.ts"`);
+    await Deno.writeTextFile(initScriptPath, initCode);
+  } catch (e) {
+    console.error("Failed to extract stdlib:", e);
+    // Fallback - write minimal init
+    await Deno.writeTextFile(initScriptPath, `
+      globalThis.hlvm = { 
+        platform: { os: "${Deno.build.os}", arch: "${Deno.build.arch}" },
+        help: () => console.log("HLVM - Type 'hlvm' to explore")
+      };
+      console.log("HLVM ready (fallback mode).");
+    `);
   }
-  
-  evalProxyProcess = new Deno.Command(denoPath, {
-    args: ["run", "--allow-all", evalProxyPath],
-    stdout: "null",
-    stderr: "null",
-  }).spawn();
-} else {
-  // Development mode - run as subprocess
-  evalProxyProcess = new Deno.Command(denoPath, {
-    args: ["run", "--allow-all", "./src/eval-proxy-server.ts"],
-    stdout: "null",
-    stderr: "null",
-  }).spawn();
 }
-
-// Wait for services
-await new Promise(r => setTimeout(r, 2000));
 
 // ANSI color codes - SICP book colors
 const PURPLE = '\x1b[38;5;54m';  // SICP purple
@@ -106,7 +134,7 @@ const RED = '\x1b[38;5;160m';    // SICP red
 const DIM = '\x1b[2m';
 const RESET = '\x1b[0m';
 
-// Show HLVM banner with SICP colors
+// Show HLVM banner
 console.log(`
 ${PURPLE}╔══════════════════════════════╗
 ║       ╦ ╦╦  ╦  ╦╔╦╗         ║
@@ -114,21 +142,18 @@ ${PURPLE}╔══════════════════════�
 ║       ╩ ╩╩═╝ ╚╝ ╩ ╩         ║
 ║                              ║
 ║  High-Level Virtual Machine  ║
-║         ${RED}Version 1.0${PURPLE}          ║
+║         ${RED}Version 2.0${PURPLE}          ║
 ╚══════════════════════════════╝${RESET}
 
-${DIM}Powered by Deno and Ollama${RESET}
+${DIM}Direct SQLite Edition - No Proxy Server${RESET}
 `);
-
-// Import stdlib  
-await import('./hlvm-stdlib.ts').catch(() => {});
 
 // Set REPL prompt color
 Deno.env.set("DENO_REPL_PROMPT", `${PURPLE}> ${RESET}`);
 
-// Run Deno REPL directly with full permissions
+// Run Deno REPL with init script
 const repl = new Deno.Command(denoPath, {
-  args: ["repl", "--quiet", "--allow-all"],
+  args: ["repl", "--quiet", "--allow-all", "--eval-file=" + initScriptPath],
   stdin: "inherit",
   stdout: "inherit", 
   stderr: "inherit",
@@ -143,7 +168,6 @@ const replProcess = repl.spawn();
 // Handle exit
 replProcess.status.then(() => {
   try { ollamaProcess.kill(); } catch {}
-  try { evalProxyProcess.kill(); } catch {}
 });
 
 // Wait for REPL
@@ -151,4 +175,3 @@ await replProcess.status;
 
 // Cleanup
 try { ollamaProcess.kill(); } catch {}
-try { evalProxyProcess.kill(); } catch {}
