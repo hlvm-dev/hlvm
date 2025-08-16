@@ -264,6 +264,7 @@ class HLVMBridge {
 }
 
 // Export for use in HLVM
+export { HLVMBridge };
 export const bridge = new HLVMBridge();
 
 // Start bridge if running as standalone

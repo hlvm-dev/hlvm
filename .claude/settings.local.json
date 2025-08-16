@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./hlvm:*)",
+      "Bash(./hlvm --help)",
+      "Bash(./resources/deno run --allow-all src/hlvm-repl.ts --help)",
+      "Bash(./resources/deno run --allow-all src/hlvm-repl.ts help)",
+      "Bash(./resources/deno run --allow-all src/hlvm-repl.ts eval \"2 + 2\")",
+      "Bash(./resources/deno run --allow-all src/hlvm-repl.ts sys platform)",
+      "Bash(./resources/deno run --allow-all src/hlvm-repl.ts fs write /tmp/test-hlvm.txt \"Hello from CLI\")",
+      "Bash(./resources/deno run --allow-all src/hlvm-repl.ts fs read /tmp/test-hlvm.txt)",
+      "Bash(./resources/deno run --allow-all src/hlvm-repl.ts clip read)",
+      "Bash(./scripts/build.sh:*)",
+      "Bash(chmod:*)",
+      "Bash(./test/run-cli-tests.sh:*)",
+      "Bash(./src/embed-stdlib.ts)",
+      "Bash(./resources/deno run --allow-all src/hlvm-repl.ts fs ls /tmp/hlvm-test)",
+      "Bash(./resources/deno test --allow-all test/cli-test.ts)",
+      "Bash(./resources/deno run --allow-all src/hlvm-repl.ts sys arch)",
+      "Bash(./resources/deno run --allow-all src/hlvm-repl.ts db load testmod)",
+      "Bash(./resources/deno run --allow-all src/hlvm-repl.ts db save testmod2 \"export const y = 42;\")",
+      "Bash(./resources/deno run --allow-all src/hlvm-repl.ts db load testmod2)",
+      "Bash(grep:*)",
+      "Bash(./test/test-all.sh:*)",
+      "Bash(./test/test.sh:*)",
+      "Bash(find:*)",
+      "Bash(./test/audit-coverage.sh:*)",
+      "Bash(./test/complete-test.sh:*)",
+      "Bash(./resources/deno run --allow-all src/hlvm-repl.ts eval '2+2')",
+      "Bash(./resources/deno run --allow-all src/hlvm-repl.ts eval 2+2)",
+      "Bash(git checkout:*)",
+      "Bash(rm:*)",
+      "Bash(mv:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

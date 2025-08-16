@@ -5,7 +5,7 @@ import * as platform from "../core/platform.js";
 export async function capture(output = null, options = {}) {
   // Use platform-specific temp file if no output specified
   if (!output) {
-    const tempDir = platform.getTempDir();
+    const tempDir = platform.tempDir();
     const timestamp = Date.now();
     output = `${tempDir}${platform.pathSep}screenshot-${timestamp}.png`;
   }

@@ -8,23 +8,16 @@ export async function hostname() {
     return Deno.hostname();
   } catch {
     // Fallback for older Deno or permission issues
-    if (platform.isWindows) {
-      const p = new Deno.Command("hostname");
-      const { stdout } = await p.output();
-      return new TextDecoder().decode(stdout).trim();
-    } else {
-      const p = new Deno.Command("hostname");
-      const { stdout } = await p.output();
-      return new TextDecoder().decode(stdout).trim();
-    }
+    const p = new Deno.Command("hostname");
+    const { stdout } = await p.output();
+    return new TextDecoder().decode(stdout).trim();
   }
 }
 
-export const getTmpdir = platform.getTempDir;
-export const homedir = platform.getHomeDir;
+// Remove unused exports - use platform.tempDir() and platform.homeDir() directly
 
 export async function exec(cmd) {
-  const shell = platform.getShell();
+  const shell = platform.shell();
   const p = new Deno.Command(shell[0], { 
     args: [...shell.slice(1), cmd] 
   });

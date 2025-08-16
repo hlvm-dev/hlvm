@@ -212,7 +212,4 @@ export const app = {
   notify
 };
 
-// Auto-connect on import (optional)
-// connect().catch(() => console.log("macOS app not running"));
-
 export default app;

@@ -21,20 +21,12 @@ globalThis.hlvm = {
   load: db.load,
   list: db.list,
   remove: db.remove,
+  db: db.db, // Expose database object for CLI
   
   // System modules
   platform,
   system,
-  fs: {
-    ...fs,
-    // Compatibility aliases for old names
-    readFile: fs.read,
-    writeFile: fs.write,
-    readTextFile: fs.read,
-    writeTextFile: fs.write,
-    readBinaryFile: fs.readBytes,
-    writeBinaryFile: fs.writeBytes
-  },
+  fs,
   clipboard,
   
   // Computer control
@@ -49,6 +41,15 @@ globalThis.hlvm = {
   
   // App control (replaces __HLVM_COMMAND__)
   app,
+  
+  // WebSocket Bridge (for macOS app communication)
+  startBridge: async (port = 11435) => {
+    // Dynamically import and start the bridge
+    const { HLVMBridge } = await import("../src/hlvm-bridge.ts");
+    const bridge = new HLVMBridge();
+    await bridge.start(port);
+    console.log("WebSocket bridge ready on port " + port);
+  },
   
   // Help
   help: () => {

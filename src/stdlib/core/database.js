@@ -65,7 +65,6 @@ export async function save(name, code) {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `, [name, namespace, sourceCode, metadata, 'javascript', Date.now(), 1]);
     
-    console.log(`✅ Saved module: ${namespace}`);
     return true;
   } catch (e) {
     throw new Error(`Save failed: ${e.message}`);
@@ -123,7 +122,6 @@ export function list() {
 export function remove(name) {
   try {
     db.exec("DELETE FROM modules WHERE key = ?", [name]);
-    console.log(`✅ Removed module: ${name}`);
     return true;
   } catch (e) {
     throw new Error(`Remove failed: ${e.message}`);

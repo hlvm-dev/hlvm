@@ -17,5 +17,3 @@ export const chat = async (prompt, model = "qwen2.5-coder:3b") => {
   const data = await response.json();
   return data.response;
 };
-
-export const models = () => list();

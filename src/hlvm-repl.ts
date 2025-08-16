@@ -2,23 +2,9 @@
 
 // HLVM REPL - Direct SQLite version (no proxy server needed)
 
-// Cross-platform temp directory
-function getTempDir(): string {
-  const envTemp = Deno.env.get("TMPDIR") || Deno.env.get("TEMP") || Deno.env.get("TMP");
-  if (envTemp) return envTemp;
-  
-  if (Deno.build.os === "windows") {
-    const userProfile = Deno.env.get("USERPROFILE");
-    if (userProfile) {
-      return `${userProfile}\\AppData\\Local\\Temp`;
-    }
-    return "C:\\Windows\\Temp";
-  }
-  
-  return "/tmp";
-}
+import { embeddedStdlib, embeddedInit, embeddedBridge } from "./embedded-stdlib.ts";
 
-const tempDir = getTempDir();
+const tempDir = Deno.env.get("TMPDIR") || Deno.env.get("TEMP") || Deno.env.get("TMP") || "/tmp";
 const pathSep = Deno.build.os === "windows" ? "\\" : "/";
 const exeExt = Deno.build.os === "windows" ? ".exe" : "";
 const DENO_PATH = `${tempDir}${pathSep}hlvm-deno${exeExt}`;
@@ -54,7 +40,286 @@ async function extractBinary(name: string, targetPath: string, resourcePath: str
 const denoPath = await extractBinary('deno', DENO_PATH, '../resources/deno');
 const ollamaPath = await extractBinary('ollama', OLLAMA_PATH, '../resources/ollama');
 
-// Start Ollama service only (no proxy server needed!)
+// CLI Mode - Parse arguments and execute commands
+if (Deno.args.length > 0) {
+  const [cmd, subcmd, ...args] = Deno.args;
+  
+  // Special case: Ollama server mode
+  if (cmd === "ollama" && subcmd === "serve") {
+    const port = Deno.env.get("OLLAMA_HOST") || "127.0.0.1:11434";
+    const ollamaServerProcess = new Deno.Command(ollamaPath, {
+      args: ["serve"],
+      env: {
+        "OLLAMA_HOST": port,
+        "OLLAMA_MODELS": `${Deno.env.get("HOME")}/.ollama/models`,
+        "OLLAMA_DEBUG": Deno.env.get("OLLAMA_DEBUG") || "0",
+        "OLLAMA_FLASH_ATTENTION": Deno.env.get("OLLAMA_FLASH_ATTENTION") || "1",
+      },
+      stdout: "inherit",
+      stderr: "inherit",
+    }).spawn();
+    await ollamaServerProcess.status;
+    Deno.exit(0);
+  }
+  
+  // Initialize hlvm for CLI commands
+  // Need to set up stdlib in temp directory first for imports to work
+  const initScriptPath = `${tempDir}${pathSep}hlvm-init.js`;
+  const stdlibPath = `${tempDir}${pathSep}stdlib`;
+  
+  // Quick setup of stdlib for CLI mode
+  await Deno.mkdir(stdlibPath, { recursive: true });
+  await Deno.mkdir(`${stdlibPath}${pathSep}core`, { recursive: true });
+  await Deno.mkdir(`${stdlibPath}${pathSep}fs`, { recursive: true });
+  await Deno.mkdir(`${stdlibPath}${pathSep}io`, { recursive: true });
+  await Deno.mkdir(`${stdlibPath}${pathSep}computer`, { recursive: true });
+  await Deno.mkdir(`${stdlibPath}${pathSep}ai`, { recursive: true });
+  await Deno.mkdir(`${stdlibPath}${pathSep}app`, { recursive: true });
+  
+  // Write embedded stdlib modules to temp
+  for (const [modulePath, moduleCode] of Object.entries(embeddedStdlib)) {
+    await Deno.writeTextFile(`${stdlibPath}${pathSep}${modulePath}`, moduleCode);
+  }
+  
+  // Write embedded init script with corrected paths
+  let initCode = embeddedInit;
+  initCode = initCode.replace(/from "\.\/stdlib\//g, `from "${stdlibPath}/`);
+  initCode = initCode.replace('"../src/hlvm-bridge.ts"', `"${tempDir}${pathSep}hlvm-bridge.ts"`);
+  initCode = initCode.replace('"../hlvm-bridge.ts"', `"${tempDir}${pathSep}hlvm-bridge.ts"`);
+  await Deno.writeTextFile(initScriptPath, initCode);
+  
+  // Import the init script
+  await import(initScriptPath);
+  
+  try {
+    // Simple CLI interface
+    switch(cmd) {
+      case "eval":
+      case "e":
+        if (!subcmd) {
+          console.error("Usage: hlvm eval <expression>");
+          Deno.exit(1);
+        }
+        const result = await eval(args.length > 0 ? `${subcmd} ${args.join(' ')}` : subcmd);
+        if (result !== undefined) console.log(result);
+        break;
+        
+      case "run":
+      case "r":
+        if (!subcmd) {
+          console.error("Usage: hlvm run <script.js>");
+          Deno.exit(1);
+        }
+        const script = await Deno.readTextFile(subcmd);
+        await eval(script);
+        break;
+        
+      case "ask":
+      case "a":
+        if (!subcmd) {
+          console.error("Usage: hlvm ask <prompt>");
+          Deno.exit(1);
+        }
+        const prompt = args.length > 0 ? `${subcmd} ${args.join(' ')}` : subcmd;
+        const response = await globalThis.hlvm.ask(prompt);
+        console.log(response);
+        break;
+        
+      case "fs":
+        switch(subcmd) {
+          case "read":
+            console.log(await globalThis.hlvm.fs.read(args[0]));
+            break;
+          case "write":
+            await globalThis.hlvm.fs.write(args[0], args.slice(1).join(' '));
+            console.log("Written");
+            break;
+          case "exists":
+            console.log(await globalThis.hlvm.fs.exists(args[0]));
+            break;
+          case "rm":
+          case "remove":
+            await globalThis.hlvm.fs.remove(args[0]);
+            console.log("Removed");
+            break;
+          case "cp":
+          case "copy":
+            await globalThis.hlvm.fs.copy(args[0], args[1]);
+            console.log("Copied");
+            break;
+          case "mv":
+          case "move":
+            await globalThis.hlvm.fs.move(args[0], args[1]);
+            console.log("Moved");
+            break;
+          case "ls":
+          case "list":
+            const dirPath = args[0] || ".";
+            const entries = [];
+            for await (const entry of globalThis.hlvm.fs.readdir(dirPath)) {
+              entries.push(entry.name);
+            }
+            entries.forEach(f => console.log(f));
+            break;
+          default:
+            console.error(`Unknown fs command: ${subcmd}`);
+            console.error("Available: read, write, exists, rm, cp, mv, ls");
+            Deno.exit(1);
+        }
+        break;
+        
+      case "db":
+        switch(subcmd) {
+          case "save":
+            await globalThis.hlvm.save(args[0], args.slice(1).join(' '));
+            console.log(`✅ Saved module: ${args[0]}`);
+            break;
+          case "load":
+            // Get the raw code from database, not the loaded module
+            const dbModule = globalThis.hlvm.db.prepare("SELECT source_code FROM modules WHERE key = ?").get(args[0]);
+            if (dbModule) {
+              console.log(dbModule.source_code);
+            } else {
+              throw new Error(`Module '${args[0]}' not found`);
+            }
+            break;
+          case "list":
+            const modules = globalThis.hlvm.list();
+            modules.forEach(m => console.log(m));
+            break;
+          case "rm":
+          case "remove":
+            await globalThis.hlvm.remove(args[0]);
+            console.log(`✅ Removed module: ${args[0]}`);
+            break;
+          default:
+            console.error(`Unknown db command: ${subcmd}`);
+            console.error("Available: save, load, list, rm");
+            Deno.exit(1);
+        }
+        break;
+        
+      case "sys":
+        switch(subcmd) {
+          case "platform":
+            console.log(globalThis.hlvm.platform.os);
+            break;
+          case "arch":
+            console.log(Deno.build.arch);
+            break;
+          case "hostname":
+            console.log(await globalThis.hlvm.system.hostname());
+            break;
+          case "home":
+            console.log(globalThis.hlvm.platform.homeDir());
+            break;
+          case "info":
+            console.log(`OS: ${globalThis.hlvm.platform.os}`);
+            console.log(`Arch: ${Deno.build.arch}`);
+            console.log(`Home: ${globalThis.hlvm.platform.homeDir()}`);
+            console.log(`Hostname: ${await globalThis.hlvm.system.hostname()}`);
+            break;
+          default:
+            console.error(`Unknown sys command: ${subcmd}`);
+            console.error("Available: platform, arch, hostname, home, info");
+            Deno.exit(1);
+        }
+        break;
+        
+      case "clip":
+        switch(subcmd) {
+          case "read":
+            console.log(await globalThis.hlvm.clipboard.read());
+            break;
+          case "write":
+            const text = args.length > 0 ? args.join(' ') : await Deno.stdin.readable.pipeThrough(new TextDecoderStream()).getReader().read().then(r => r.value);
+            await globalThis.hlvm.clipboard.write(text || "");
+            console.log("Written to clipboard");
+            break;
+          default:
+            console.error(`Unknown clip command: ${subcmd}`);
+            console.error("Available: read, write");
+            Deno.exit(1);
+        }
+        break;
+        
+      case "screen":
+        if (subcmd === "capture") {
+          await globalThis.hlvm.screen.capture(args[0] || "screenshot.png");
+          console.log(`Captured to ${args[0] || "screenshot.png"}`);
+        } else {
+          console.error("Usage: hlvm screen capture [filename]");
+          Deno.exit(1);
+        }
+        break;
+        
+      case "notify":
+        await globalThis.hlvm.notification.notify(subcmd || "Notification", args.join(' ') || "HLVM");
+        break;
+        
+      case "help":
+        console.log(`HLVM CLI Commands:
+        
+Core:
+  eval <expr>         Evaluate JavaScript expression
+  run <script.js>     Run JavaScript file  
+  ask <prompt>        Query AI (Ollama)
+
+File System:
+  fs read <file>      Read file contents
+  fs write <f> <txt>  Write text to file
+  fs exists <path>    Check if path exists
+  fs rm <path>        Remove file/directory
+  fs cp <src> <dst>   Copy file/directory
+  fs mv <src> <dst>   Move file/directory
+  fs ls [dir]         List directory contents
+
+Database:
+  db save <name> <js> Save module code
+  db load <name>      Load module
+  db list             List saved modules
+  db rm <name>        Remove module
+
+System:
+  sys platform        Show OS platform
+  sys arch            Show architecture
+  sys hostname        Show hostname
+  sys home            Show home directory
+  sys info            Show all system info
+
+Clipboard:
+  clip read           Read clipboard text
+  clip write <text>   Write to clipboard
+
+Other:
+  screen capture <f>  Capture screenshot
+  notify <t> <msg>    Show notification
+  help                Show this help
+  
+No arguments starts REPL mode.`);
+        break;
+        
+      case "repl":
+        // Continue to REPL mode below
+        break;
+        
+      default:
+        console.error(`Unknown command: ${cmd}`);
+        console.error("Run 'hlvm help' for available commands");
+        Deno.exit(1);
+    }
+    
+    // Exit after executing CLI command (unless it's "repl")
+    if (cmd !== "repl") {
+      Deno.exit(0);
+    }
+  } catch (error) {
+    console.error(`Error: ${error.message}`);
+    Deno.exit(1);
+  }
+}
+
+// Start Ollama service for REPL mode (no proxy server needed!)
 const ollamaProcess = new Deno.Command(ollamaPath, {
   args: ["serve"],
   env: {
@@ -65,67 +330,48 @@ const ollamaProcess = new Deno.Command(ollamaPath, {
   stderr: "null",
 }).spawn();
 
-// Check if running as compiled binary
-const isCompiled = !import.meta.url.startsWith("file:///Users");
-
 // Copy init script and stdlib to temp for REPL to load
 const initScriptPath = `${tempDir}${pathSep}hlvm-init.js`;
 const stdlibPath = `${tempDir}${pathSep}stdlib`;
 
-// Always extract stdlib for compiled binary
-if (true) {  // Always extract to temp
-  // When compiled, extract all embedded files
-  try {
-    // Create stdlib directory structure
-    await Deno.mkdir(stdlibPath, { recursive: true });
-    await Deno.mkdir(`${stdlibPath}${pathSep}core`, { recursive: true });
-    await Deno.mkdir(`${stdlibPath}${pathSep}fs`, { recursive: true });
-    await Deno.mkdir(`${stdlibPath}${pathSep}io`, { recursive: true });
-    await Deno.mkdir(`${stdlibPath}${pathSep}computer`, { recursive: true });
-    await Deno.mkdir(`${stdlibPath}${pathSep}ai`, { recursive: true });
-    await Deno.mkdir(`${stdlibPath}${pathSep}app`, { recursive: true });
-    
-    // Copy all stdlib modules to their organized locations
-    const stdlibModules = [
-      { path: 'core/platform.js', src: './stdlib/core/platform.js' },
-      { path: 'core/system.js', src: './stdlib/core/system.js' },
-      { path: 'core/database.js', src: './stdlib/core/database.js' },
-      { path: 'fs/filesystem.js', src: './stdlib/fs/filesystem.js' },
-      { path: 'io/clipboard.js', src: './stdlib/io/clipboard.js' },
-      { path: 'computer/notification.js', src: './stdlib/computer/notification.js' },
-      { path: 'computer/screen.js', src: './stdlib/computer/screen.js' },
-      { path: 'computer/keyboard.js', src: './stdlib/computer/keyboard.js' },
-      { path: 'computer/mouse.js', src: './stdlib/computer/mouse.js' },
-      { path: 'ai/ollama.js', src: './stdlib/ai/ollama.js' },
-      { path: 'app/control.js', src: './stdlib/app/control.js' }
-    ];
-    
-    for (const module of stdlibModules) {
-      const moduleCode = await Deno.readTextFile(new URL(module.src, import.meta.url));
-      await Deno.writeTextFile(`${stdlibPath}${pathSep}${module.path}`, moduleCode);
-    }
-    
-    // Copy bridge module to temp
-    const bridgeCode = await Deno.readTextFile(new URL('./hlvm-bridge.ts', import.meta.url));
-    await Deno.writeTextFile(`${tempDir}${pathSep}hlvm-bridge.ts`, bridgeCode);
-    
-    // Copy init script with corrected paths
-    let initCode = await Deno.readTextFile(new URL('./hlvm-init.js', import.meta.url));
-    // Fix import paths to use temp directory
-    initCode = initCode.replace(/from "\.\/stdlib\//g, `from "${stdlibPath}/`);
-    initCode = initCode.replace('"../src/hlvm-bridge.ts"', `"${tempDir}${pathSep}hlvm-bridge.ts"`);
-    await Deno.writeTextFile(initScriptPath, initCode);
-  } catch (e) {
-    console.error("Failed to extract stdlib:", e);
-    // Fallback - write minimal init
-    await Deno.writeTextFile(initScriptPath, `
+// Extract stdlib to temp directory
+try {
+  // Create stdlib directory structure
+  await Deno.mkdir(stdlibPath, { recursive: true });
+  await Deno.mkdir(`${stdlibPath}${pathSep}core`, { recursive: true });
+  await Deno.mkdir(`${stdlibPath}${pathSep}fs`, { recursive: true });
+  await Deno.mkdir(`${stdlibPath}${pathSep}io`, { recursive: true });
+  await Deno.mkdir(`${stdlibPath}${pathSep}computer`, { recursive: true });
+  await Deno.mkdir(`${stdlibPath}${pathSep}ai`, { recursive: true });
+  await Deno.mkdir(`${stdlibPath}${pathSep}app`, { recursive: true });
+  
+  // Write all embedded stdlib modules to temp
+  for (const [modulePath, moduleCode] of Object.entries(embeddedStdlib)) {
+    await Deno.writeTextFile(`${stdlibPath}${pathSep}${modulePath}`, moduleCode);
+  }
+  
+  // Write embedded bridge module to temp
+  await Deno.writeTextFile(`${tempDir}${pathSep}hlvm-bridge.ts`, embeddedBridge);
+  
+  // Write embedded init script with corrected paths
+  let initCode = embeddedInit;
+  // Fix import paths to use temp directory
+  initCode = initCode.replace(/from "\.\/stdlib\//g, `from "${stdlibPath}/`);
+  initCode = initCode.replace('"../src/hlvm-bridge.ts"', `"${tempDir}${pathSep}hlvm-bridge.ts"`);
+  initCode = initCode.replace('"../hlvm-bridge.ts"', `"${tempDir}${pathSep}hlvm-bridge.ts"`);
+  await Deno.writeTextFile(initScriptPath, initCode);
+  
+  console.log("✓ Extracted embedded stdlib modules to temp directory");
+} catch (e) {
+  console.error("Failed to extract stdlib:", e);
+  // Fallback - write minimal init
+  await Deno.writeTextFile(initScriptPath, `
       globalThis.hlvm = { 
         platform: { os: "${Deno.build.os}", arch: "${Deno.build.arch}" },
         help: () => console.log("HLVM - Type 'hlvm' to explore")
       };
       console.log("HLVM ready (fallback mode).");
-    `);
-  }
+  `);
 }
 
 // ANSI color codes - SICP book colors
@@ -174,4 +420,4 @@ replProcess.status.then(() => {
 await replProcess.status;
 
 // Cleanup
-try { ollamaProcess.kill(); } catch {}
+try { ollamaProcess.kill(); } catch {}// Test change at Sat 16 Aug 2025 16:25:03 EDT
