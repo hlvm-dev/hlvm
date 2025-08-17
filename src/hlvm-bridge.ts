@@ -1,5 +1,6 @@
-// HLVM Bridge - WebSocket server for bidirectional communication with macOS app
-// Replaces brittle __HLVM_COMMAND__ strings with proper JSON-RPC over WebSocket
+// HLVM Bridge - WebSocket server for GUI control commands
+// NOTE: JavaScript eval uses stdin/stdout, NOT this WebSocket bridge
+// This bridge is only for hlvm.app GUI control commands
 
 interface JSONRPCRequest {
   jsonrpc: "2.0";
@@ -35,11 +36,7 @@ class HLVMBridge {
   }
 
   private registerHandlers() {
-    // System handlers
-    this.handlers.set("eval", async (params) => {
-      const result = await eval(params.code);
-      return result;
-    });
+    // GUI Control handlers (eval is handled via stdin/stdout, not WebSocket)
 
     this.handlers.set("system.info", async () => {
       return {
@@ -101,7 +98,7 @@ class HLVMBridge {
     });
   }
 
-  async start(port = 11435) {
+  async start(port = 11436) {
     // Start server without blocking
     this.server = Deno.serve({ port, onListen: () => {
       console.log(`HLVM Bridge running on ws://localhost:${port}`);
@@ -269,5 +266,5 @@ export const bridge = new HLVMBridge();
 
 // Start bridge if running as standalone
 if (import.meta.main) {
-  await bridge.start(11435);
+  await bridge.start(11436);
 }

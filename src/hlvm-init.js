@@ -21,7 +21,7 @@ globalThis.hlvm = {
   load: db.load,
   list: db.list,
   remove: db.remove,
-  db: db.db, // Expose database object for CLI
+  db: Object.assign(db.db, { path: db.path }), // Expose database object with path for CLI
   
   // System modules
   platform,
@@ -40,16 +40,9 @@ globalThis.hlvm = {
   ask: ollama.chat, // Shorthand
   
   // App control (replaces __HLVM_COMMAND__)
+  // The macOS app runs a WebSocket server on port 11436
+  // hlvm.app connects as a CLIENT to control the GUI
   app,
-  
-  // WebSocket Bridge (for macOS app communication)
-  startBridge: async (port = 11435) => {
-    // Dynamically import and start the bridge
-    const { HLVMBridge } = await import("../src/hlvm-bridge.ts");
-    const bridge = new HLVMBridge();
-    await bridge.start(port);
-    console.log("WebSocket bridge ready on port " + port);
-  },
   
   // Help
   help: () => {
@@ -125,18 +118,3 @@ Examples:
 
 // Global utilities
 globalThis.pprint = (obj) => console.log(JSON.stringify(obj, null, 2));
-
-// Add bridge starter function (manual activation)
-globalThis.hlvm.startBridge = async () => {
-  try {
-    const { bridge } = await import("../src/hlvm-bridge.ts");
-    await bridge.start(11435);
-    console.log("WebSocket bridge ready on port 11435");
-    return true;
-  } catch (e) {
-    console.error("Failed to start WebSocket bridge:", e.message);
-    return false;
-  }
-};
-
-console.log("HLVM ready. Type 'hlvm.help()' for help.");

@@ -1,6 +1,6 @@
 // Database module - Cross-platform SQLite persistence
 
-import { Database } from "https://deno.land/x/sqlite3@0.12.0/mod.ts";
+import { DatabaseSync } from "node:sqlite";  // Works in compiled binaries!
 import * as platform from "./platform.js";
 
 // Get cross-platform database path
@@ -32,7 +32,7 @@ const dbDir = path.substring(0,
 await Deno.mkdir(dbDir, { recursive: true });
 
 // Open database
-export const db = new Database(path);
+export const db = new DatabaseSync(path);
 
 // Create table with WAL mode for better concurrency
 db.exec("PRAGMA journal_mode=WAL");
@@ -59,11 +59,12 @@ export async function save(name, code) {
       platform: platform.os
     });
     
-    db.exec(`
+    const stmt = db.prepare(`
       INSERT OR REPLACE INTO modules 
       (key, namespace, source_code, metadata, type, updated_at, spotlight)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `, [name, namespace, sourceCode, metadata, 'javascript', Date.now(), 1]);
+    `);
+    stmt.run(name, namespace, sourceCode, metadata, 'javascript', Date.now(), 1);
     
     return true;
   } catch (e) {
@@ -121,7 +122,8 @@ export function list() {
 
 export function remove(name) {
   try {
-    db.exec("DELETE FROM modules WHERE key = ?", [name]);
+    const stmt = db.prepare("DELETE FROM modules WHERE key = ?");
+    stmt.run(name);
     return true;
   } catch (e) {
     throw new Error(`Remove failed: ${e.message}`);

@@ -190,10 +190,7 @@ export const app = {
   },
   
   // Utility commands
-  clipboard: {
-    copy: (text) => request("clipboard.copy", { text }),
-    paste: () => request("clipboard.paste")
-  },
+  // Note: Clipboard operations use hlvm.clipboard directly (not via WebSocket)
   
   // REPL commands
   repl: {

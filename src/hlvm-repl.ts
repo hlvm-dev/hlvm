@@ -88,87 +88,126 @@ if (Deno.args.length > 0) {
   initCode = initCode.replace('"../hlvm-bridge.ts"', `"${tempDir}${pathSep}hlvm-bridge.ts"`);
   await Deno.writeTextFile(initScriptPath, initCode);
   
-  // Import the init script
-  await import(initScriptPath);
-  
   try {
-    // Simple CLI interface
+    // Commands that DON'T need HLVM environment
+    if (cmd === "eval" || cmd === "e") {
+      if (!subcmd) {
+        console.error("Usage: hlvm eval <expression>");
+        Deno.exit(1);
+      }
+      const result = await eval(args.length > 0 ? `${subcmd} ${args.join(' ')}` : subcmd);
+      if (result !== undefined) console.log(result);
+      Deno.exit(0);
+    }
+    
+    if (cmd === "run" || cmd === "r") {
+      if (!subcmd) {
+        console.error("Usage: hlvm run <script.js>");
+        Deno.exit(1);
+      }
+      const script = await Deno.readTextFile(subcmd);
+      await eval(script);
+      Deno.exit(0);
+    }
+    
+    if (cmd === "help" || cmd === "h") {
+      // Help doesn't need HLVM environment
+      console.log(`HLVM CLI Commands
+
+Basic:
+  eval <expr>         Evaluate expression
+  run <script.js>     Run JavaScript file
+  help                Show this help
+  
+File System:
+  fs read <path>      Read file
+  fs write <p> <txt>  Write file
+  fs exists <path>    Check if exists
+  fs rm <path>        Remove file
+  fs ls <path>        List directory
+
+Database:
+  db save <n> <code>  Save module
+  db load <name>      Load module
+  db list             List modules
+  db rm <name>        Remove module
+
+System:
+  sys platform        Show OS platform
+  sys arch            Show architecture
+  sys hostname        Show hostname
+  sys home            Show home directory
+  
+Other:
+  ask <prompt>        Ask Ollama AI
+  clip read           Read clipboard
+  clip write <text>   Write clipboard
+  screen capture <f>  Capture screenshot
+  notify <t> <msg>    Show notification`);
+      Deno.exit(0);
+    }
+    
+    // Load HLVM environment for CLI commands
+    await import(initScriptPath);
+    
+    // Now handle CLI commands directly (no subprocess needed!)
     switch(cmd) {
-      case "eval":
-      case "e":
-        if (!subcmd) {
-          console.error("Usage: hlvm eval <expression>");
-          Deno.exit(1);
-        }
-        const result = await eval(args.length > 0 ? `${subcmd} ${args.join(' ')}` : subcmd);
-        if (result !== undefined) console.log(result);
-        break;
+      
+    case "ask":
+    case "a":
+      if (!subcmd) {
+        console.error("Usage: hlvm ask <prompt>");
+        Deno.exit(1);
+      }
+      const prompt = args.length > 0 ? `${subcmd} ${args.join(' ')}` : subcmd;
+      const response = await globalThis.hlvm.ask(prompt);
+      console.log(response);
+      break;
         
-      case "run":
-      case "r":
-        if (!subcmd) {
-          console.error("Usage: hlvm run <script.js>");
-          Deno.exit(1);
-        }
-        const script = await Deno.readTextFile(subcmd);
-        await eval(script);
-        break;
-        
-      case "ask":
-      case "a":
-        if (!subcmd) {
-          console.error("Usage: hlvm ask <prompt>");
-          Deno.exit(1);
-        }
-        const prompt = args.length > 0 ? `${subcmd} ${args.join(' ')}` : subcmd;
-        const response = await globalThis.hlvm.ask(prompt);
-        console.log(response);
-        break;
-        
-      case "fs":
+    case "fs":
         switch(subcmd) {
           case "read":
-            console.log(await globalThis.hlvm.fs.read(args[0]));
+        console.log(await globalThis.hlvm.fs.read(args[0]));
             break;
           case "write":
-            await globalThis.hlvm.fs.write(args[0], args.slice(1).join(' '));
-            console.log("Written");
+        await globalThis.hlvm.fs.write(args[0], args.slice(1).join(' '));
+        console.log("Written");
             break;
           case "exists":
-            console.log(await globalThis.hlvm.fs.exists(args[0]));
+        console.log(await globalThis.hlvm.fs.exists(args[0]));
             break;
           case "rm":
           case "remove":
-            await globalThis.hlvm.fs.remove(args[0]);
-            console.log("Removed");
+        await globalThis.hlvm.fs.remove(args[0]);
+        console.log("Removed");
             break;
           case "cp":
           case "copy":
-            await globalThis.hlvm.fs.copy(args[0], args[1]);
-            console.log("Copied");
+        await globalThis.hlvm.fs.copy(args[0], args[1]);
+        console.log("Copied");
             break;
           case "mv":
           case "move":
-            await globalThis.hlvm.fs.move(args[0], args[1]);
-            console.log("Moved");
+        await globalThis.hlvm.fs.move(args[0], args[1]);
+        console.log("Moved");
             break;
           case "ls":
           case "list":
-            const dirPath = args[0] || ".";
-            const entries = [];
-            for await (const entry of globalThis.hlvm.fs.readdir(dirPath)) {
-              entries.push(entry.name);
-            }
-            entries.forEach(f => console.log(f));
-            break;
-          default:
-            console.error(`Unknown fs command: ${subcmd}`);
-            console.error("Available: read, write, exists, rm, cp, mv, ls");
-            Deno.exit(1);
+        const dirPath = args[0] || ".";
+        const entries = [];
+        for await (const entry of globalThis.hlvm.fs.readdir(dirPath)) {
+          entries.push(entry.name);
         }
+        entries.forEach(f => console.log(f));
         break;
-        
-      case "db":
+      default:
+        console.error(`Unknown fs command: ${subcmd}`);
+        console.error("Available: read, write, exists, rm, cp, mv, ls");
+        Deno.exit(1);
+    }
+    break;
+    
+  case "db":
         switch(subcmd) {
           case "save":
             await globalThis.hlvm.save(args[0], args.slice(1).join(' '));
@@ -309,10 +348,8 @@ No arguments starts REPL mode.`);
         Deno.exit(1);
     }
     
-    // Exit after executing CLI command (unless it's "repl")
-    if (cmd !== "repl") {
-      Deno.exit(0);
-    }
+    Deno.exit(0);
+    
   } catch (error) {
     console.error(`Error: ${error.message}`);
     Deno.exit(1);
@@ -396,6 +433,9 @@ ${DIM}Direct SQLite Edition - No Proxy Server${RESET}
 
 // Set REPL prompt color
 Deno.env.set("DENO_REPL_PROMPT", `${PURPLE}> ${RESET}`);
+
+// Show ready message only for REPL mode
+console.log("HLVM ready. Type 'hlvm.help()' for help.");
 
 // Run Deno REPL with init script
 const repl = new Deno.Command(denoPath, {
