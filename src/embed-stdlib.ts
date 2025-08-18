@@ -2,24 +2,32 @@
 
 // Script to embed stdlib files into TypeScript code for compilation
 
-import { join, dirname } from "https://deno.land/std@0.220.0/path/mod.ts";
+import { join, dirname, relative } from "https://deno.land/std@0.220.0/path/mod.ts";
+import { walk } from "https://deno.land/std@0.220.0/fs/walk.ts";
 
 const __dirname = dirname(new URL(import.meta.url).pathname);
 
-// Define stdlib modules to embed
-const stdlibModules = [
-  { name: "core/platform.js", path: "./stdlib/core/platform.js" },
-  { name: "core/system.js", path: "./stdlib/core/system.js" },
-  { name: "core/database.js", path: "./stdlib/core/database.js" },
-  { name: "fs/filesystem.js", path: "./stdlib/fs/filesystem.js" },
-  { name: "io/clipboard.js", path: "./stdlib/io/clipboard.js" },
-  { name: "computer/notification.js", path: "./stdlib/computer/notification.js" },
-  { name: "computer/screen.js", path: "./stdlib/computer/screen.js" },
-  { name: "computer/keyboard.js", path: "./stdlib/computer/keyboard.js" },
-  { name: "computer/mouse.js", path: "./stdlib/computer/mouse.js" },
-  { name: "ai/ollama.js", path: "./stdlib/ai/ollama.js" },
-  { name: "app/control.js", path: "./stdlib/app/control.js" }
-];
+// Automatically discover all .js files in stdlib directory
+const stdlibModules = [];
+const stdlibPath = new URL("./stdlib", import.meta.url).pathname;
+
+for await (const entry of walk(stdlibPath, { 
+  exts: [".js"],
+  followSymlinks: false 
+})) {
+  if (entry.isFile) {
+    // Convert absolute path to relative module name
+    const moduleName = relative(stdlibPath, entry.path).replace(/\\/g, "/");
+    const relativePath = `./stdlib/${moduleName}`;
+    stdlibModules.push({ 
+      name: moduleName, 
+      path: relativePath 
+    });
+  }
+}
+
+// Sort modules for consistent output
+stdlibModules.sort((a, b) => a.name.localeCompare(b.name));
 
 // Read all stdlib modules
 const embeddedModules: Record<string, string> = {};

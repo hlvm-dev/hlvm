@@ -6,8 +6,6 @@ export const version = Deno.osRelease();
 export const isDarwin = os === "darwin";
 export const isWindows = os === "windows";
 export const isLinux = os === "linux";
-
-// Directory paths - concise names
 export function tempDir() {
   const envTemp = Deno.env.get("TMPDIR") || 
                   Deno.env.get("TEMP") || 

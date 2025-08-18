@@ -64,8 +64,8 @@ class HLVMBridge {
     });
 
     this.handlers.set("modules.load", async (params) => {
-      if (globalThis.hlvm?.load) {
-        return await globalThis.hlvm.load(params.name);
+      if (globalThis.hlvm?.db?.load) {
+        return await globalThis.hlvm.db.load(params.name);
       }
       throw new Error("Module load not available");
     });

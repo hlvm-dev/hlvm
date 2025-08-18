@@ -2,15 +2,10 @@
 
 import * as platform from "../core/platform.js";
 
-// File operations - concise names with clear context from parameters
 export const read = (path) => Deno.readTextFile(path);
 export const write = (path, content) => Deno.writeTextFile(path, content);
-
-// Binary operations when needed
 export const readBytes = (path) => Deno.readFile(path);
 export const writeBytes = (path, data) => Deno.writeFile(path, data);
-
-// Path operations with cross-platform support
 export async function exists(path) {
   try {
     await Deno.stat(path);

@@ -1,28 +1,11 @@
 // Keyboard module - Cross-platform keyboard automation
 
 import * as platform from "../core/platform.js";
-
-// Escape text for keyboard input (cross-platform)
-function escapeText(text) {
-  if (platform.isWindows) {
-    // PowerShell SendKeys escaping
-    return text
-      .replace(/\{/g, '{{')
-      .replace(/\}/g, '}}')
-      .replace(/\(/g, '{(}')
-      .replace(/\)/g, '{)}')
-      .replace(/\+/g, '{+}')
-      .replace(/\^/g, '{^}')
-      .replace(/%/g, '{%}')
-      .replace(/~/g, '{~}');
-  } else {
-    // Unix shell escaping
-    return text.replace(/'/g, "'\\''");
-  }
-}
+import { escapeKeyboard } from "../core/utils.js";
+import { powershell, linuxTool, PS, ERRORS } from "../core/exec.js";
 
 export async function type(text) {
-  const escapedText = escapeText(text);
+  const escapedText = escapeKeyboard(text);
   
   if (platform.isDarwin) {
     // macOS: osascript (built-in)
@@ -32,31 +15,18 @@ export async function type(text) {
   } else if (platform.isWindows) {
     // Windows: PowerShell SendKeys (built-in)
     const script = `
-      Add-Type -AssemblyName System.Windows.Forms
+      ${PS.forms}
       [System.Windows.Forms.SendKeys]::SendWait("${escapedText}")
     `;
-    await new Deno.Command("powershell", {
-      args: ["-NoProfile", "-Command", script]
-    }).output();
+    await powershell(script);
     
   } else {
     // Linux: Try xdotool or ydotool
-    try {
-      await new Deno.Command("xdotool", {
-        args: ["type", text] // xdotool handles text directly
-      }).output();
-    } catch {
-      try {
-        // ydotool for Wayland
-        await new Deno.Command("ydotool", {
-          args: ["type", text]
-        }).output();
-      } catch {
-        throw new Error(
-          "Keyboard type failed. Install xdotool (X11) or ydotool (Wayland)"
-        );
-      }
-    }
+    await linuxTool(
+      ["type", text], // xdotool args
+      ["type", text], // ydotool args
+      ERRORS.LINUX_TOOLS
+    );
   }
 }
 
@@ -173,12 +143,10 @@ export async function press(key, modifiers = {}) {
     keys += keyMapping.windows;
     
     const script = `
-      Add-Type -AssemblyName System.Windows.Forms
+      ${PS.forms}
       [System.Windows.Forms.SendKeys]::SendWait("${keys}")
     `;
-    await new Deno.Command("powershell", {
-      args: ["-NoProfile", "-Command", script]
-    }).output();
+    await powershell(script);
     
   } else {
     // Linux: xdotool or ydotool
@@ -189,22 +157,11 @@ export async function press(key, modifiers = {}) {
     if (modifiers.cmd || modifiers.command || modifiers.super) keys.push("super");
     keys.push(keyMapping.linux);
     
-    try {
-      await new Deno.Command("xdotool", {
-        args: ["key", keys.join("+")]
-      }).output();
-    } catch {
-      try {
-        // ydotool for Wayland
-        await new Deno.Command("ydotool", {
-          args: ["key", ...keys]
-        }).output();
-      } catch {
-        throw new Error(
-          "Keyboard press failed. Install xdotool (X11) or ydotool (Wayland)"
-        );
-      }
-    }
+    await linuxTool(
+      ["key", keys.join("+")], // xdotool args
+      ["key", ...keys], // ydotool args
+      ERRORS.LINUX_TOOLS
+    );
   }
 }
 

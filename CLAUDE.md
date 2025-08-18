@@ -1,5 +1,22 @@
 # CLAUDE.md - Instructions for Claude AI Assistant
 
+## CRITICAL: API Documentation Requirements
+
+### EVERY TIME You Add/Remove/Modify Public APIs
+
+**You MUST update this documentation immediately when:**
+- Adding new CLI commands
+- Adding new REPL JavaScript/TypeScript APIs  
+- Modifying existing APIs
+- Removing deprecated APIs
+- Changing API signatures or behavior
+
+**Documentation Format:**
+- Use markdown format suitable for GitHub docs
+- Include examples for every API
+- Mark deprecated APIs clearly
+- Test all examples before documenting
+
 ## HLVM Testing Requirements
 
 ### The Master Test
@@ -95,3 +112,16 @@ If tests fail:
 3. Only proceed when all pass
 
 This ensures HLVM remains 100% functional at all times.
+
+## Public API Documentation Responsibility
+
+**You are responsible for maintaining complete API documentation.**
+
+When you add/modify/remove ANY public API, you MUST create or update the corresponding documentation in a format suitable for `docs/*.md` files.
+
+Current public APIs that need documentation:
+- CLI commands: `hlvm`, `hlvm save`, `hlvm deno *`, `hlvm ollama *`
+- JavaScript APIs: `hlvm.*` namespace (platform, system, fs, clipboard, notification, screen, keyboard, mouse, ollama, app)
+- WebSocket Bridge API (port 11436, JSON-RPC)
+
+Documentation should follow the style of https://github.com/ollama/ollama/blob/main/docs/api.md

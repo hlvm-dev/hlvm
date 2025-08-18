@@ -1,17 +1,8 @@
 // Notification module - Cross-platform UI dialogs and notifications
 
 import * as platform from "../core/platform.js";
-
-// Escape string for shell command (cross-platform)
-function escapeShell(str) {
-  if (platform.isWindows) {
-    // PowerShell escaping
-    return str.replace(/"/g, '`"').replace(/\$/g, '`$');
-  } else {
-    // Unix shell escaping
-    return str.replace(/'/g, "'\\''");
-  }
-}
+import { escapeShell } from "../core/utils.js";
+import { decode, powershell, PS, ERRORS } from "../core/exec.js";
 
 export async function alert(message, title = "Alert") {
   const escapedMessage = escapeShell(message);
@@ -25,12 +16,10 @@ export async function alert(message, title = "Alert") {
   } else if (platform.isWindows) {
     // Windows: PowerShell MessageBox (built-in)
     const script = `
-      Add-Type -AssemblyName System.Windows.Forms
+      ${PS.forms}
       [System.Windows.Forms.MessageBox]::Show("${escapedMessage}", "${escapedTitle}")
     `;
-    await new Deno.Command("powershell", {
-      args: ["-NoProfile", "-Command", script]
-    }).output();
+    await powershell(script);
     
   } else {
     // Linux: Try multiple tools
@@ -88,9 +77,7 @@ export async function notify(message, title = "Notification", subtitle = "") {
         $toast = New-Object Windows.UI.Notifications.ToastNotification $xml
         [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("HLVM").Show($toast)
       `;
-      await new Deno.Command("powershell", {
-        args: ["-NoProfile", "-Command", script]
-      }).output();
+      await powershell(script);
     } catch {
       // Fallback to simple alert
       await alert(message, title);
@@ -103,7 +90,7 @@ export async function notify(message, title = "Notification", subtitle = "") {
         args: [title, message]
       }).output();
     } catch {
-      console.error("Notification failed. Install libnotify-bin (notify-send)");
+      console.error(ERRORS.LINUX_NOTIFY);
     }
   }
 }
@@ -124,7 +111,7 @@ export async function confirm(message, title = "Confirm") {
       const { stdout } = await new Deno.Command("osascript", { 
         args: ["-e", script] 
       }).output();
-      return new TextDecoder().decode(stdout).trim() === "OK";
+      return decode(stdout).trim() === "OK";
     } catch {
       return false; // User cancelled
     }
@@ -132,7 +119,7 @@ export async function confirm(message, title = "Confirm") {
   } else if (platform.isWindows) {
     // Windows: PowerShell YesNo MessageBox (built-in)
     const script = `
-      Add-Type -AssemblyName System.Windows.Forms
+      ${PS.forms}
       $result = [System.Windows.Forms.MessageBox]::Show(
         "${escapedMessage}", 
         "${escapedTitle}", 
@@ -144,10 +131,8 @@ export async function confirm(message, title = "Confirm") {
         Write-Host "false"
       }
     `;
-    const { stdout } = await new Deno.Command("powershell", {
-      args: ["-NoProfile", "-Command", script]
-    }).output();
-    return new TextDecoder().decode(stdout).trim() === "true";
+    const { stdout } = await powershell(script);
+    return decode(stdout).trim() === "true";
     
   } else {
     // Linux: Try zenity or kdialog
@@ -163,7 +148,7 @@ export async function confirm(message, title = "Confirm") {
         }).output();
         return code === 0;
       } catch {
-        console.error("Confirm dialog failed. Install zenity or kdialog");
+        console.error(ERRORS.LINUX_DIALOG);
         return false;
       }
     }
@@ -188,7 +173,7 @@ export async function prompt(message, defaultValue = "", title = "Input") {
       const { stdout } = await new Deno.Command("osascript", { 
         args: ["-e", script] 
       }).output();
-      return new TextDecoder().decode(stdout).trim();
+      return decode(stdout).trim();
     } catch {
       return null; // User cancelled
     }
@@ -196,7 +181,7 @@ export async function prompt(message, defaultValue = "", title = "Input") {
   } else if (platform.isWindows) {
     // Windows: PowerShell InputBox (built-in)
     const script = `
-      Add-Type -AssemblyName Microsoft.VisualBasic
+      ${PS.visualBasic}
       $result = [Microsoft.VisualBasic.Interaction]::InputBox(
         "${escapedMessage}", 
         "${escapedTitle}", 
@@ -211,11 +196,8 @@ export async function prompt(message, defaultValue = "", title = "Input") {
         Write-Host $result
       }
     `;
-    const { stdout } = await new Deno.Command("powershell", {
-      args: ["-NoProfile", "-Command", script]
-    }).output();
-    const result = new TextDecoder().decode(stdout).trim();
-    return result;
+    const { stdout } = await powershell(script);
+    return decode(stdout).trim();
     
   } else {
     // Linux: Try zenity or kdialog
@@ -225,15 +207,15 @@ export async function prompt(message, defaultValue = "", title = "Input") {
       const { stdout, code } = await new Deno.Command(args[0], {
         args: args.slice(1)
       }).output();
-      return code === 0 ? new TextDecoder().decode(stdout).trim() : null;
+      return code === 0 ? decode(stdout).trim() : null;
     } catch {
       try {
         const { stdout, code } = await new Deno.Command("kdialog", {
           args: ["--inputbox", message, defaultValue, "--title", title]
         }).output();
-        return code === 0 ? new TextDecoder().decode(stdout).trim() : null;
+        return code === 0 ? decode(stdout).trim() : null;
       } catch {
-        console.error("Prompt dialog failed. Install zenity or kdialog");
+        console.error(ERRORS.LINUX_DIALOG);
         return null;
       }
     }

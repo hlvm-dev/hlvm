@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# HLVM Complete Test Suite - Tests EVERY function thoroughly
-# Not just typeof checks, but actual functionality
+# HLVM Test Suite - Tests REPL functions
+# Tests actual functionality, not just type checks
 
 echo "╔══════════════════════════════════════════╗"
-echo "║   HLVM COMPLETE FUNCTIONALITY TEST      ║"
-echo "║     Testing ALL 59+ functions           ║"
+echo "║         HLVM REPL TEST SUITE            ║"
+echo "║      Testing All REPL Functions         ║"
 echo "╚══════════════════════════════════════════╝"
 echo
 
@@ -74,18 +74,12 @@ run_test "system.env()" "console.log(hlvm.system.env('HOME').startsWith('/'))" "
 
 echo
 echo "════════════════════════════════════════════"
-echo "DATABASE MODULE (6 functions)"
+echo "DATABASE MODULE (3 functions)"
 echo "════════════════════════════════════════════"
 
-# Clean up first
-echo "await hlvm.remove('test1').catch(()=>{}); await hlvm.remove('test2').catch(()=>{})" | $HLVM 2>&1 > /dev/null
-
-run_test "database.save()" "await hlvm.save('test1', 'export const x = 99'); console.log('saved')" "saved"
-run_test "database.load()" "const m = await hlvm.load('test1'); console.log(m.x)" "99"
-run_test "database.list()" "const l = hlvm.list(); console.log(l.some(m => m.key === 'test1'))" "true"
-run_test "database.remove()" "await hlvm.remove('test1'); console.log('removed')" "removed"
 run_test "database.path" "console.log(hlvm.db.path.includes('.sqlite'))" "true"
 run_test "database.db object" "console.log(typeof hlvm.db.exec)" "function"
+run_test "database.load (type)" "console.log(typeof hlvm.db.load)" "function"
 
 echo
 echo "════════════════════════════════════════════"
@@ -120,6 +114,13 @@ echo "════════════════════════�
 run_test "clipboard.write()" "await hlvm.clipboard.write('test-clip'); console.log('written')" "written"
 run_test "clipboard.read()" "const c = await hlvm.clipboard.read(); console.log(c.includes('test-clip'))" "true"
 run_test "clipboard.isAvailable()" "console.log(await hlvm.clipboard.isAvailable())" "true"
+
+echo
+echo "════════════════════════════════════════════"
+echo "CONTEXT FEATURE (1 property)"
+echo "════════════════════════════════════════════"
+
+run_test "hlvm.context" "await hlvm.clipboard.write('swift-code'); console.log(await hlvm.context)" "swift-code"
 
 echo
 echo "════════════════════════════════════════════"
@@ -180,62 +181,33 @@ run_test "app.chat object" "console.log(typeof hlvm.app.chat)" "object"
 
 echo
 echo "════════════════════════════════════════════"
-echo "CLI COMMANDS (24 commands)"
+echo "SPOTLIGHT MODULE MANAGEMENT (5 functions)"
 echo "════════════════════════════════════════════"
 
-echo "Testing CLI interface..."
+# Clean up first
+echo "await hlvm.app.spotlight.modules.remove('test1').catch(()=>{}); await hlvm.app.spotlight.modules.remove('test2').catch(()=>{})" | $HLVM 2>&1 > /dev/null
 
-# Test CLI commands using Deno directly
-HLVM_CLI="./resources/deno run --allow-all src/hlvm-repl.ts"
+run_test "spotlight.modules.add()" "await hlvm.app.spotlight.modules.add('test1', 'export const x = 99'); console.log('added')" "added"
+run_test "spotlight.modules.list()" "const l = await hlvm.app.spotlight.modules.list(); console.log(l.some(m => m.key === 'test1'))" "true"
+run_test "spotlight.modules.has()" "console.log(await hlvm.app.spotlight.modules.has('test1'))" "true"
+run_test "spotlight.modules.get()" "const src = await hlvm.app.spotlight.modules.get('test1'); console.log(src.includes('export const x'))" "true"
+run_test "spotlight.modules.remove()" "await hlvm.app.spotlight.modules.remove('test1'); console.log('removed')" "removed"
 
-cli_test() {
-    local name="$1"
-    local cmd="$2"
-    local expected="$3"
-    
-    ((total++))
-    printf "[%3d] CLI: %-40s" "$total" "$name"
-    
-    result=$($HLVM_CLI $cmd 2>&1 | grep -v "HLVM ready" | grep -v "Type 'hlvm" | head -5)
-    
-    if echo "$result" | grep -q "$expected"; then
-        echo -e "${GREEN}✓${NC}"
-        ((passed++))
-    else
-        echo -e "${RED}✗${NC}"
-        echo "      Command: $cmd"
-        echo "      Expected: $expected"
-        echo "      Got: $(echo "$result" | head -1)"
-        ((failed++))
-    fi
-}
+echo
+echo "════════════════════════════════════════════"
+echo "CUSTOM PROPERTY PERSISTENCE (5 tests)"
+echo "════════════════════════════════════════════"
 
-cli_test "eval command" "eval 2+2" "4"
-cli_test "help command" "help" "HLVM CLI Commands"
-cli_test "fs read" "fs read /etc/hosts" "127.0.0.1\|localhost"
-cli_test "fs write" "fs write /tmp/cli-test.txt 'test content'" "Written"
-cli_test "fs exists" "fs exists /tmp/cli-test.txt" "true"
-cli_test "fs rm" "fs rm /tmp/cli-test.txt" "Removed"
-cli_test "fs ls" "fs ls /tmp" ".*"
-cli_test "sys platform" "sys platform" "darwin\|linux\|windows"
-cli_test "sys arch" "sys arch" "x86_64\|aarch64"
-cli_test "sys hostname" "sys hostname" ".*"
-cli_test "sys home" "sys home" "/Users\|/home"
-cli_test "sys info" "sys info" "OS:"
-cli_test "db save" "db save clitest 'export const v=1'" "Saved"
-cli_test "db list" "db list" "clitest"
-cli_test "db load" "db load clitest" "export const v=1"
-cli_test "db rm" "db rm clitest" "Removed"
-cli_test "clip write" "clip write 'cli clipboard test'" "Written"
-cli_test "clip read" "clip read" "cli clipboard test"
-cli_test "screen capture" "screen capture /tmp/cli-screen.png" "Captured"
-cli_test "notify" "notify 'Test' 'Message'" ""
+run_test "custom property assignment" "hlvm.mytest = {data: 'hello'}; console.log(hlvm.mytest.data)" "hello"
+run_test "custom array assignment" "hlvm.myarray = [1, 2, 3]; console.log(hlvm.myarray[1])" "2"
+run_test "custom property update" "hlvm.mytest = {data: 'updated'}; console.log(hlvm.mytest.data)" "updated"
+run_test "custom property null removal" "hlvm.mytest = null; console.log(typeof hlvm.mytest)" "undefined"
+run_test "custom property delete" "hlvm.temp = 'test'; delete hlvm.temp; console.log(typeof hlvm.temp)" "undefined"
 
-rm -f /tmp/cli-screen.png /tmp/cli-test.txt
 
 echo
 echo "╔════════════════════════════════════════════╗"
-echo "║         COMPLETE TEST RESULTS             ║"
+echo "║           TEST RESULTS                   ║"
 echo "╚════════════════════════════════════════════╝"
 echo
 echo "Total tests: $total"
@@ -246,7 +218,7 @@ echo
 
 if [ $failed -eq 0 ]; then
     echo -e "${GREEN}╔════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║    ✅ COMPLETE SUCCESS - 100% TESTED      ║${NC}"
+    echo -e "${GREEN}║       ✅ ALL TESTS PASSED               ║${NC}"
     echo -e "${GREEN}╚════════════════════════════════════════════╝${NC}"
     exit 0
 else

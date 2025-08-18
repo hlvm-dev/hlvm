@@ -142,7 +142,37 @@ export const app = {
     hide: () => request("spotlight.hide"),
     navigateIn: () => request("spotlight.navigateIn"),
     navigateOut: () => request("spotlight.navigateOut"),
-    search: (query) => request("spotlight.search", { query })
+    search: (query) => request("spotlight.search", { query }),
+    
+    // Module management for Spotlight
+    modules: {
+      add: async (name, code) => {
+        // Import database module to save to modules table
+        const { save } = await import("../core/database.js");
+        return save(name, code);
+      },
+      
+      remove: async (name) => {
+        const { remove } = await import("../core/database.js");
+        return remove(name);
+      },
+      
+      list: async () => {
+        const { list } = await import("../core/database.js");
+        return list();
+      },
+      
+      get: async (name) => {
+        const { getSource } = await import("../core/database.js");
+        return getSource(name);
+      },
+      
+      has: async (name) => {
+        const { list } = await import("../core/database.js");
+        const modules = list();
+        return modules.some(m => m.key === name);
+      }
+    }
   },
   
   // Chat commands (replacing __HLVM_CHAT_*)
