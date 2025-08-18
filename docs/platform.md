@@ -176,7 +176,7 @@ async function createTempFile(prefix = 'hlvm') {
   const fileName = `${prefix}-${Date.now()}.txt`;
   const path = `${tempDir}${hlvm.platform.pathSep}${fileName}`;
   
-  await hlvm.fs.write(path, '');
+  await hlvm.computer.fs.write(path, '');
   return path;
 }
 ```
@@ -208,7 +208,7 @@ await hlvm.app.spotlight.modules.add('sysinfo', `
       Separator: hlvm.platform.pathSep
     };
     
-    await hlvm.notification.alert(
+    await hlvm.ui.notification.alert(
       JSON.stringify(info, null, 2),
       "System Information"
     );

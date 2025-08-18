@@ -240,7 +240,7 @@ function getDatabaseStats() {
       "SELECT COUNT(*) as count FROM custom_properties"
     ).get().count,
     
-    dbSize: hlvm.fs.exists(hlvm.db.path) ? 
+    dbSize: hlvm.computer.fs.exists(hlvm.db.path) ? 
       "File size check" : "Not found",
     
     lastModule: hlvm.db.prepare(

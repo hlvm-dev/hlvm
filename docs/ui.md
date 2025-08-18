@@ -216,9 +216,9 @@ const connected = hlvm.ui.isConnected();
 // Add a module (available to all UIs including Spotlight)
 await hlvm.modules.save('timer', `
   export default async function(seconds = 5) {
-    await hlvm.notification.notify(\`Timer started for \${seconds}s\`, "Timer");
+    await hlvm.ui.notification.notify(\`Timer started for \${seconds}s\`, "Timer");
     await new Promise(r => setTimeout(r, seconds * 1000));
-    await hlvm.notification.alert("Time's up!", "Timer");
+    await hlvm.ui.notification.alert("Time's up!", "Timer");
   }
 `);
 

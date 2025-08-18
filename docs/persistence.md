@@ -99,7 +99,7 @@ These properties cannot be overridden:
 - `hlvm.screen`
 - `hlvm.keyboard`
 - `hlvm.mouse`
-- `hlvm.ollama`
+- `hlvm.ai` (includes `ollama`)
 - `hlvm.ui`
 - `hlvm.context`
 - `hlvm.help`

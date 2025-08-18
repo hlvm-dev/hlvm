@@ -5,7 +5,6 @@
 import * as platform from "./stdlib/core/platform.js";
 import * as system from "./stdlib/core/system.js";
 import * as db from "./stdlib/core/database.js";
-import repl from "./stdlib/core/repl.js";
 import * as fs from "./stdlib/fs/filesystem.js";
 import * as clipboard from "./stdlib/io/clipboard.js";
 import * as notification from "./stdlib/computer/notification.js";
@@ -66,7 +65,6 @@ const hlvmBase = {
   platform,
   system,
   fs,
-  repl: repl.history,
   clipboard,
   
   // Computer control - grouped for context access
@@ -335,7 +333,7 @@ globalThis.hlvm = new Proxy(hlvmBase, {
     // List of system properties that cannot be overridden
     const systemProps = ['modules', 'db', 'platform', 'system', 'fs', 'clipboard', 'notification', 
                         'screen', 'keyboard', 'mouse', 'ui', 'ai', 'app', 'computer', 'context', 
-                        'help', 'status', 'repl'];
+                        'help', 'status'];
     
     if (systemProps.includes(prop)) {
       console.error(`Cannot override system property: hlvm.${prop}`);
@@ -364,6 +362,8 @@ globalThis.hlvm = new Proxy(hlvmBase, {
 
 // Global utilities
 globalThis.pprint = (obj) => console.log(JSON.stringify(obj, null, 2));
+
+
 
 // Global shorthand for context
 Object.defineProperty(globalThis, 'context', {

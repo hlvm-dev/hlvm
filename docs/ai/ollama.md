@@ -1,4 +1,4 @@
-# hlvm.ollama
+# hlvm.ai.ollama
 
 AI/LLM integration with embedded Ollama.
 
@@ -9,7 +9,7 @@ AI/LLM integration with embedded Ollama.
 Chat with AI model.
 
 ```javascript
-const response = await hlvm.ollama.chat("Explain quantum physics");
+const response = await hlvm.ai.ollama.chat("Explain quantum physics");
 console.log(response);
 ```
 
@@ -29,7 +29,7 @@ console.log(response);
 List available models.
 
 ```javascript
-const models = await hlvm.ollama.list();
+const models = await hlvm.ai.ollama.list();
 models.forEach(m => console.log(m.name, m.size));
 ```
 
@@ -42,7 +42,7 @@ models.forEach(m => console.log(m.name, m.size));
 Download a model from Ollama library.
 
 ```javascript
-await hlvm.ollama.pull("llama2");
+await hlvm.ai.ollama.pull("llama2");
 ```
 
 **Parameters:**
@@ -57,7 +57,7 @@ await hlvm.ollama.pull("llama2");
 Delete a downloaded model.
 
 ```javascript
-await hlvm.ollama.delete("llama2");
+await hlvm.ai.ollama.delete("llama2");
 ```
 
 **Parameters:**
@@ -72,7 +72,7 @@ await hlvm.ollama.delete("llama2");
 Show model information.
 
 ```javascript
-const info = await hlvm.ollama.show("llama3.2");
+const info = await hlvm.ai.ollama.show("llama3.2");
 console.log(info);
 ```
 
@@ -85,7 +85,7 @@ console.log(info);
 
 ### hlvm.ask(prompt)
 
-Shorthand for `hlvm.ollama.chat()`.
+Shorthand for `hlvm.ai.ollama.chat()`.
 
 ```javascript
 const answer = await hlvm.ask("What is 2+2?");
@@ -96,14 +96,14 @@ const answer = await hlvm.ask("What is 2+2?");
 ### Simple Chat
 
 ```javascript
-const response = await hlvm.ollama.chat("Write a haiku about coding");
+const response = await hlvm.ai.ollama.chat("Write a haiku about coding");
 console.log(response);
 ```
 
 ### Chat with Options
 
 ```javascript
-const response = await hlvm.ollama.chat("Be creative", {
+const response = await hlvm.ai.ollama.chat("Be creative", {
   model: "llama3.2",
   temperature: 0.9,
   system: "You are a creative writer"
@@ -114,14 +114,14 @@ const response = await hlvm.ollama.chat("Be creative", {
 
 ```javascript
 // List models
-const models = await hlvm.ollama.list();
+const models = await hlvm.ai.ollama.list();
 console.log("Available models:", models.map(m => m.name));
 
 // Download new model
-await hlvm.ollama.pull("codellama");
+await hlvm.ai.ollama.pull("codellama");
 
 // Use the new model
-const code = await hlvm.ollama.chat("Write a Python function", {
+const code = await hlvm.ai.ollama.chat("Write a Python function", {
   model: "codellama"
 });
 ```
@@ -131,15 +131,15 @@ const code = await hlvm.ollama.chat("Write a Python function", {
 ```javascript
 await hlvm.app.spotlight.modules.add('ai-assistant', `
   export default async function() {
-    const prompt = await hlvm.notification.prompt("Ask AI:");
+    const prompt = await hlvm.ui.notification.prompt("Ask AI:");
     if (!prompt) return;
     
-    await hlvm.notification.notify("Thinking...", "AI");
+    await hlvm.ui.notification.notify("Thinking...", "AI");
     
-    const response = await hlvm.ollama.chat(prompt);
+    const response = await hlvm.ai.ollama.chat(prompt);
     
-    await hlvm.clipboard.write(response);
-    await hlvm.notification.alert(response, "AI Response");
+    await hlvm.computer.clipboard.write(response);
+    await hlvm.ui.notification.alert(response, "AI Response");
   }
 `);
 ```
@@ -150,13 +150,13 @@ await hlvm.app.spotlight.modules.add('ai-assistant', `
 async function generateCode(description) {
   const prompt = `Write JavaScript code for: ${description}`;
   
-  const code = await hlvm.ollama.chat(prompt, {
+  const code = await hlvm.ai.ollama.chat(prompt, {
     model: "codellama",
     system: "You are a code generator. Return only code, no explanations."
   });
   
   // Save to file
-  await hlvm.fs.write('/tmp/generated.js', code);
+  await hlvm.computer.fs.write('/tmp/generated.js', code);
   
   return code;
 }
@@ -170,7 +170,7 @@ let context = [];
 async function conversation(message) {
   context.push({ role: "user", content: message });
   
-  const response = await hlvm.ollama.chat(message, {
+  const response = await hlvm.ai.ollama.chat(message, {
     context: context
   });
   

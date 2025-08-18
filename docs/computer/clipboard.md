@@ -45,24 +45,13 @@ if (available) {
 
 **Returns:** Promise<boolean> - Whether clipboard is available
 
-## Global Shorthand
-
-### context
-
-Global property that returns current clipboard text.
-
-```javascript
-// Equivalent to await hlvm.computer.clipboard.read()
-const text = await context;
-console.log(text);
-```
 
 ## Examples
 
 ### Copy File Content
 
 ```javascript
-const content = await hlvm.fs.read('/tmp/data.txt');
+const content = await hlvm.computer.fs.read('/tmp/data.txt');
 await hlvm.computer.clipboard.write(content);
 await hlvm.ui.notification.notify("File copied to clipboard", "Success");
 ```

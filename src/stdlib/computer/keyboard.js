@@ -9,7 +9,14 @@ export async function type(text) {
   if (platform.isDarwin) {
     // macOS: osascript (built-in)
     const script = `tell application "System Events" to keystroke "${escapedText}"`;
-    await new Deno.Command("osascript", { args: ["-e", script] }).output();
+    const result = await new Deno.Command("osascript", { args: ["-e", script] }).output();
+    if (!result.success) {
+      const error = new TextDecoder().decode(result.stderr);
+      if (error.includes("not allowed to send keystrokes")) {
+        throw new Error("Keyboard control requires accessibility permissions. Go to System Settings → Privacy & Security → Accessibility and add your terminal app.");
+      }
+      throw new Error(`Keyboard type failed: ${error}`);
+    }
     
   } else if (platform.isWindows) {
     // Windows: PowerShell SendKeys (built-in)
@@ -131,7 +138,14 @@ export async function press(key, modifiers = {}) {
       ? `tell application "System Events" to keystroke "${keyName}" using {${mods.join(", ")}}`
       : `tell application "System Events" to keystroke "${keyName}"`;
     
-    await new Deno.Command("osascript", { args: ["-e", script] }).output();
+    const result = await new Deno.Command("osascript", { args: ["-e", script] }).output();
+    if (!result.success) {
+      const error = new TextDecoder().decode(result.stderr);
+      if (error.includes("not allowed to send keystrokes")) {
+        throw new Error("Keyboard control requires accessibility permissions. Go to System Settings → Privacy & Security → Accessibility and add your terminal app.");
+      }
+      throw new Error(`Keyboard press failed: ${error}`);
+    }
     
   } else if (platform.isWindows) {
     // Windows: PowerShell SendKeys with modifiers

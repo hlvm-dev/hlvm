@@ -28,7 +28,7 @@ Create or update a global shortcut.
 ```javascript
 // Create shortcuts for common operations
 await hlvm.modules.shortcut('clip', 'hlvm.computer.clipboard.read');
-await hlvm.modules.shortcut('save', 'hlvm.fs.write');
+await hlvm.modules.shortcut('save', 'hlvm.computer.fs.write');
 await hlvm.modules.shortcut('notify', 'hlvm.computer.notification.notify');
 
 // Use them
@@ -53,7 +53,7 @@ shortcuts.forEach(s => {
 });
 // Output:
 // clip() → hlvm.computer.clipboard.read
-// save() → hlvm.fs.write
+// save() → hlvm.computer.fs.write
 // notify() → hlvm.computer.notification.notify
 ```
 
@@ -100,9 +100,9 @@ await hlvm.modules.shortcut('copy', 'hlvm.computer.clipboard.write');
 
 ### File Operations
 ```javascript
-await hlvm.modules.shortcut('read', 'hlvm.fs.read');
-await hlvm.modules.shortcut('write', 'hlvm.fs.write');
-await hlvm.modules.shortcut('exists', 'hlvm.fs.exists');
+await hlvm.modules.shortcut('read', 'hlvm.computer.fs.read');
+await hlvm.modules.shortcut('write', 'hlvm.computer.fs.write');
+await hlvm.modules.shortcut('exists', 'hlvm.computer.fs.exists');
 ```
 
 ### AI Operations
@@ -150,7 +150,7 @@ async function setupProductivityShortcuts() {
   await hlvm.modules.shortcut('todo', 'hlvm.modules.load');
   await hlvm.modules.shortcut('clip', 'hlvm.computer.clipboard.read');
   await hlvm.modules.shortcut('copy', 'hlvm.computer.clipboard.write');
-  await hlvm.modules.shortcut('note', 'hlvm.fs.write');
+  await hlvm.modules.shortcut('note', 'hlvm.computer.fs.write');
   await hlvm.modules.shortcut('snap', 'hlvm.computer.screen.capture');
   
   console.log("Productivity shortcuts ready!");

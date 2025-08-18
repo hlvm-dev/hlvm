@@ -5,7 +5,7 @@ HLVM (High-Level Virtual Machine) is a JavaScript runtime with embedded Deno and
 ## Quick Start
 
 ```javascript
-// Start REPL
+// Start interactive shell
 ./hlvm
 
 // Create a module (available in Spotlight)
@@ -26,33 +26,31 @@ await hello();
 
 ```
 hlvm
-├── modules         # Module management
+├── modules         # Module management & shortcuts
 ├── platform        # Platform information
 ├── system          # System utilities
-├── fs              # File system operations
-├── repl            # REPL utilities
-│   └── history     # Command history
-├── computer        # Device control
+├── computer        # Computer control
 │   ├── mouse       # Mouse automation
 │   ├── keyboard    # Keyboard automation
 │   ├── screen      # Screen capture
-│   ├── clipboard   # Clipboard operations
-│   └── context     # Current context
+│   ├── clipboard   # Clipboard read/write
+│   ├── notification # System notifications
+│   ├── context     # Selection & screen context
+│   └── fs          # File system operations
 ├── ui              # User interface
-│   └── notification # Alerts and notifications
+│   └── notification # UI dialogs (alert, confirm, prompt)
 ├── ai              # AI services
-│   └── ollama      # LLM integration
-└── app             # GUI app control (when running)
+│   └── ollama      # Ollama LLM integration
+└── app             # macOS GUI app control
 ```
 
 ## API Reference
 
 ### Core Modules
-- [**hlvm.modules**](modules.md) - Module management
+- [**hlvm.modules**](modules.md) - Module management & shortcuts
 - [**hlvm.platform**](platform.md) - Platform information
 - [**hlvm.system**](system.md) - System utilities
-- [**hlvm.fs**](fs.md) - File system operations
-- [**hlvm.repl**](repl-history.md) - REPL history and utilities
+- [**hlvm.computer.fs**](fs.md) - File system operations
 
 ### Computer Control
 - [**hlvm.computer.clipboard**](computer/clipboard.md) - Clipboard operations
@@ -69,7 +67,8 @@ hlvm
 ### App Control
 - [**hlvm.app**](app.md) - GUI app control (Spotlight, chat, etc.)
 
-### Persistence
+### Additional Features
+- [**Shortcuts**](shortcuts.md) - Create permanent global shortcuts
 - [**Custom Properties**](persistence.md) - Persistent data storage (`hlvm.myData = ...`)
 
 ## Module Patterns
@@ -128,7 +127,7 @@ hlvm.myData = null;
 await hlvm.modules.save('note', `
   export default async function() {
     const note = await hlvm.ui.notification.prompt("Note:");
-    await hlvm.fs.write(\`/tmp/note-\${Date.now()}.txt\`, note);
+    await hlvm.computer.fs.write(\`/tmp/note-\${Date.now()}.txt\`, note);
     await hlvm.ui.notification.notify("Saved!", "Note");
   }
 `);
@@ -158,7 +157,7 @@ await hlvm.modules.save('ai', `
 `);
 ```
 
-## REPL Commands
+## Interactive Commands
 
 ```javascript
 hlvm.help()    // Show help

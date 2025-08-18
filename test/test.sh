@@ -69,7 +69,7 @@ run_test "system.exec()" "const r = await hlvm.system.exec('echo test'); console
 run_test "system.exit (type)" "console.log(typeof hlvm.system.exit)" "function"
 run_test "system.pid()" "console.log(hlvm.system.pid() > 0)" "true"
 run_test "system.cwd()" "console.log(hlvm.system.cwd().includes('/'))" "true"
-run_test "system.chdir (type)" "console.log(typeof hlvm.system.chdir)" "function"
+run_test "system.chdir()" "const orig = hlvm.system.cwd(); hlvm.system.chdir('/tmp'); const changed = hlvm.system.cwd(); hlvm.system.chdir(orig); console.log(changed)" "/tmp"
 run_test "system.env()" "console.log(hlvm.system.env('HOME').startsWith('/'))" "true"
 
 echo
@@ -219,26 +219,12 @@ echo "════════════════════════�
 echo "APP CONTROL MODULE (1 object)"
 echo "════════════════════════════════════════════"
 
-run_test "app object" "console.log(typeof hlvm.app)" "object"
-run_test "app.connect (type)" "console.log(typeof hlvm.app.connect)" "function"
-run_test "app.spotlight object" "console.log(typeof hlvm.app.spotlight)" "object"
-run_test "app.chat object" "console.log(typeof hlvm.app.chat)" "object"
+run_test "app object exists" "console.log(typeof hlvm.app)" "object"
+run_test "app.connect exists" "console.log(typeof hlvm.app.connect)" "function"
+run_test "app.spotlight exists" "console.log(typeof hlvm.app.spotlight)" "object"
+run_test "app.chat exists" "console.log(typeof hlvm.app.chat)" "object"
 
 echo
-echo "════════════════════════════════════════════"
-echo "REPL HISTORY MODULE (6 functions)"
-echo "════════════════════════════════════════════"
-
-run_test "repl.clear()" "hlvm.repl.clear(); console.log('cleared')" "cleared"
-run_test "repl._add()" "hlvm.repl._add('test command 1'); hlvm.repl._add('test command 2'); console.log('added')" "added"
-run_test "repl.size()" "console.log(hlvm.repl.size() >= 2)" "true"
-run_test "repl.get()" "const h = hlvm.repl.get(); console.log(h.includes('test command 1'))" "true"
-run_test "repl.get(limit)" "const h = hlvm.repl.get(1); console.log(h.length)" "1"
-run_test "repl.search()" "const s = hlvm.repl.search('command 2'); console.log(s.length > 0)" "true"
-run_test "repl.last()" "hlvm.repl._add('last cmd'); console.log(hlvm.repl.last())" "last cmd"
-
-echo
-echo "════════════════════════════════════════════"
 echo "CUSTOM PROPERTY PERSISTENCE (5 tests)"
 echo "════════════════════════════════════════════"
 

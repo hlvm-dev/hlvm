@@ -172,7 +172,7 @@ async function getSystemInfo() {
 ```javascript
 await hlvm.app.spotlight.modules.add('backup', `
   export default async function() {
-    await hlvm.notification.notify("Starting backup...", "Backup");
+    await hlvm.ui.notification.notify("Starting backup...", "Backup");
     
     // Run backup command
     const result = await hlvm.system.exec(
@@ -180,9 +180,9 @@ await hlvm.app.spotlight.modules.add('backup', `
     );
     
     if (result.code === 0) {
-      await hlvm.notification.alert("Backup complete!", "Success");
+      await hlvm.ui.notification.alert("Backup complete!", "Success");
     } else {
-      await hlvm.notification.alert(
+      await hlvm.ui.notification.alert(
         "Backup failed: " + result.stderr,
         "Error"
       );

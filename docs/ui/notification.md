@@ -1,4 +1,4 @@
-# hlvm.notification
+# hlvm.ui.notification
 
 UI dialogs and system notifications.
 
@@ -9,7 +9,7 @@ UI dialogs and system notifications.
 Show system notification.
 
 ```javascript
-await hlvm.notification.notify("Task complete!", "HLVM");
+await hlvm.ui.notification.notify("Task complete!", "HLVM");
 ```
 
 **Parameters:**
@@ -25,7 +25,7 @@ await hlvm.notification.notify("Task complete!", "HLVM");
 Show alert dialog. Blocks until user clicks OK.
 
 ```javascript
-await hlvm.notification.alert("Operation finished", "Success");
+await hlvm.ui.notification.alert("Operation finished", "Success");
 ```
 
 **Parameters:**
@@ -41,7 +41,7 @@ await hlvm.notification.alert("Operation finished", "Success");
 Show confirmation dialog with OK/Cancel buttons.
 
 ```javascript
-const confirmed = await hlvm.notification.confirm("Delete file?", "Confirm");
+const confirmed = await hlvm.ui.notification.confirm("Delete file?", "Confirm");
 if (confirmed) {
   // User clicked OK
 }
@@ -60,7 +60,7 @@ if (confirmed) {
 Show input prompt dialog.
 
 ```javascript
-const name = await hlvm.notification.prompt("Enter your name:", "John");
+const name = await hlvm.ui.notification.prompt("Enter your name:", "John");
 if (name !== null) {
   console.log(`Hello ${name}`);
 }
@@ -77,9 +77,9 @@ if (name !== null) {
 ### Sequential Notifications
 
 ```javascript
-await hlvm.notification.notify("Starting process...", "Status");
+await hlvm.ui.notification.notify("Starting process...", "Status");
 // Do work...
-await hlvm.notification.notify("Process complete!", "Status");
+await hlvm.ui.notification.notify("Process complete!", "Status");
 ```
 
 ### Error Handling with Alerts
@@ -88,7 +88,7 @@ await hlvm.notification.notify("Process complete!", "Status");
 try {
   await riskyOperation();
 } catch (error) {
-  await hlvm.notification.alert(
+  await hlvm.ui.notification.alert(
     `Error: ${error.message}`,
     "Operation Failed"
   );
@@ -98,26 +98,26 @@ try {
 ### User Confirmation Flow
 
 ```javascript
-const proceed = await hlvm.notification.confirm(
+const proceed = await hlvm.ui.notification.confirm(
   "This will delete all data. Continue?",
   "Warning"
 );
 
 if (proceed) {
-  await hlvm.notification.notify("Deleting...", "Status");
+  await hlvm.ui.notification.notify("Deleting...", "Status");
   await deleteAllData();
-  await hlvm.notification.alert("Data deleted", "Complete");
+  await hlvm.ui.notification.alert("Data deleted", "Complete");
 }
 ```
 
 ### Input Collection
 
 ```javascript
-const name = await hlvm.notification.prompt("Your name:");
-const age = await hlvm.notification.prompt("Your age:");
+const name = await hlvm.ui.notification.prompt("Your name:");
+const age = await hlvm.ui.notification.prompt("Your age:");
 
 if (name && age) {
-  await hlvm.notification.alert(
+  await hlvm.ui.notification.alert(
     `Hello ${name}, age ${age}`,
     "Welcome"
   );
@@ -129,13 +129,13 @@ if (name && age) {
 ```javascript
 async function processFiles(files) {
   for (let i = 0; i < files.length; i++) {
-    await hlvm.notification.notify(
+    await hlvm.ui.notification.notify(
       `Processing ${i + 1}/${files.length}`,
       "Progress"
     );
     await processFile(files[i]);
   }
-  await hlvm.notification.alert("All files processed!", "Done");
+  await hlvm.ui.notification.alert("All files processed!", "Done");
 }
 ```
 

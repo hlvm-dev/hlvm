@@ -123,7 +123,7 @@ if (await hlvm.modules.has('mymodule')) {
 ```javascript
 await hlvm.modules.save('greet', `
   export default async function(name = 'World') {
-    await hlvm.notification.alert(\`Hello \${name}!\`);
+    await hlvm.ui.notification.alert(\`Hello \${name}!\`);
     return \`Greeted \${name}\`;
   }
 `);
@@ -138,7 +138,7 @@ await greet('John');  // Shows alert "Hello John!"
 ```javascript
 await hlvm.modules.save('notify', `
   // This runs immediately when loaded
-  await hlvm.notification.notify("Task complete!", "HLVM");
+  await hlvm.ui.notification.notify("Task complete!", "HLVM");
   console.log("Notification sent");
 `);
 

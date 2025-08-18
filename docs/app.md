@@ -358,7 +358,7 @@ await hlvm.app.playground.toggle();
 
 // Set code
 await hlvm.app.playground.setCode(`
-  const data = await hlvm.fs.read('/tmp/test.txt');
+  const data = await hlvm.computer.fs.read('/tmp/test.txt');
   console.log(data);
   return data.length;
 `);

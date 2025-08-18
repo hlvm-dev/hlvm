@@ -1,4 +1,4 @@
-# hlvm.fs
+# hlvm.computer.fs
 
 File system operations.
 
@@ -9,7 +9,7 @@ File system operations.
 Read text file content.
 
 ```javascript
-const content = await hlvm.fs.read('/path/to/file.txt');
+const content = await hlvm.computer.fs.read('/path/to/file.txt');
 ```
 
 **Parameters:**
@@ -24,7 +24,7 @@ const content = await hlvm.fs.read('/path/to/file.txt');
 Write text to file.
 
 ```javascript
-await hlvm.fs.write('/path/to/file.txt', 'Hello World');
+await hlvm.computer.fs.write('/path/to/file.txt', 'Hello World');
 ```
 
 **Parameters:**
@@ -40,7 +40,7 @@ await hlvm.fs.write('/path/to/file.txt', 'Hello World');
 Read binary file as Uint8Array.
 
 ```javascript
-const bytes = await hlvm.fs.readBytes('/path/to/image.png');
+const bytes = await hlvm.computer.fs.readBytes('/path/to/image.png');
 ```
 
 **Parameters:**
@@ -56,7 +56,7 @@ Write binary data to file.
 
 ```javascript
 const data = new Uint8Array([72, 101, 108, 108, 111]);
-await hlvm.fs.writeBytes('/path/to/file.bin', data);
+await hlvm.computer.fs.writeBytes('/path/to/file.bin', data);
 ```
 
 **Parameters:**
@@ -72,7 +72,7 @@ await hlvm.fs.writeBytes('/path/to/file.bin', data);
 Check if file or directory exists.
 
 ```javascript
-if (await hlvm.fs.exists('/path/to/check')) {
+if (await hlvm.computer.fs.exists('/path/to/check')) {
   console.log('File exists');
 }
 ```
@@ -89,7 +89,7 @@ if (await hlvm.fs.exists('/path/to/check')) {
 Delete file or directory.
 
 ```javascript
-await hlvm.fs.remove('/path/to/delete');
+await hlvm.computer.fs.remove('/path/to/delete');
 ```
 
 **Parameters:**
@@ -104,7 +104,7 @@ await hlvm.fs.remove('/path/to/delete');
 Create directory (including parent directories).
 
 ```javascript
-await hlvm.fs.mkdir('/path/to/new/dir');
+await hlvm.computer.fs.mkdir('/path/to/new/dir');
 ```
 
 **Parameters:**
@@ -119,7 +119,7 @@ await hlvm.fs.mkdir('/path/to/new/dir');
 List directory contents.
 
 ```javascript
-const files = await hlvm.fs.ls('/path/to/dir');
+const files = await hlvm.computer.fs.ls('/path/to/dir');
 // Returns: ['file1.txt', 'file2.js', 'subdirectory']
 ```
 
@@ -135,7 +135,7 @@ const files = await hlvm.fs.ls('/path/to/dir');
 Copy file or directory.
 
 ```javascript
-await hlvm.fs.copy('/source/file.txt', '/destination/file.txt');
+await hlvm.computer.fs.copy('/source/file.txt', '/destination/file.txt');
 ```
 
 **Parameters:**
@@ -151,7 +151,7 @@ await hlvm.fs.copy('/source/file.txt', '/destination/file.txt');
 Move or rename file/directory.
 
 ```javascript
-await hlvm.fs.move('/old/path', '/new/path');
+await hlvm.computer.fs.move('/old/path', '/new/path');
 ```
 
 **Parameters:**
@@ -165,7 +165,7 @@ await hlvm.fs.move('/old/path', '/new/path');
 ### Read and Process JSON
 
 ```javascript
-const data = await hlvm.fs.read('/tmp/data.json');
+const data = await hlvm.computer.fs.read('/tmp/data.json');
 const parsed = JSON.parse(data);
 console.log(parsed);
 ```
@@ -175,13 +175,13 @@ console.log(parsed);
 ```javascript
 const source = '/important/file.txt';
 const backup = `/tmp/backup-${Date.now()}.txt`;
-await hlvm.fs.copy(source, backup);
+await hlvm.computer.fs.copy(source, backup);
 ```
 
 ### List and Filter Files
 
 ```javascript
-const files = await hlvm.fs.ls('/tmp');
+const files = await hlvm.computer.fs.ls('/tmp');
 const txtFiles = files.filter(f => f.endsWith('.txt'));
 console.log('Text files:', txtFiles);
 ```
@@ -191,9 +191,9 @@ console.log('Text files:', txtFiles);
 ```javascript
 async function safeWrite(path, content) {
   const backup = `${path}.backup`;
-  if (await hlvm.fs.exists(path)) {
-    await hlvm.fs.copy(path, backup);
+  if (await hlvm.computer.fs.exists(path)) {
+    await hlvm.computer.fs.copy(path, backup);
   }
-  await hlvm.fs.write(path, content);
+  await hlvm.computer.fs.write(path, content);
 }
 ```

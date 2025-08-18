@@ -1,4 +1,4 @@
-# hlvm.screen
+# hlvm.computer.screen
 
 Screen capture functionality.
 
@@ -10,10 +10,10 @@ Capture screenshot to file.
 
 ```javascript
 // Full screen capture
-await hlvm.screen.capture('/tmp/screenshot.png');
+await hlvm.computer.screen.capture('/tmp/screenshot.png');
 
 // Interactive selection
-await hlvm.screen.capture('/tmp/selection.png', {
+await hlvm.computer.screen.capture('/tmp/selection.png', {
   interactive: true
 });
 ```
@@ -32,15 +32,15 @@ await hlvm.screen.capture('/tmp/selection.png', {
 ### Basic Screenshot
 
 ```javascript
-await hlvm.screen.capture('/tmp/screen.png');
-await hlvm.notification.notify("Screenshot saved", "Success");
+await hlvm.computer.screen.capture('/tmp/screen.png');
+await hlvm.ui.notification.notify("Screenshot saved", "Success");
 ```
 
 ### Interactive Capture
 
 ```javascript
 // User selects area
-await hlvm.screen.capture('/tmp/selection.png', {
+await hlvm.computer.screen.capture('/tmp/selection.png', {
   interactive: true
 });
 ```
@@ -49,9 +49,9 @@ await hlvm.screen.capture('/tmp/selection.png', {
 
 ```javascript
 const path = '/tmp/screenshot.png';
-await hlvm.screen.capture(path);
-await hlvm.clipboard.writeImage(path);
-await hlvm.notification.notify("Screenshot copied!", "Success");
+await hlvm.computer.screen.capture(path);
+await hlvm.computer.clipboard.writeImage(path);
+await hlvm.ui.notification.notify("Screenshot copied!", "Success");
 ```
 
 ### Timestamped Screenshots
@@ -61,7 +61,7 @@ async function takeScreenshot() {
   const timestamp = new Date().toISOString().replace(/:/g, '-');
   const path = `/tmp/screenshot-${timestamp}.png`;
   
-  await hlvm.screen.capture(path);
+  await hlvm.computer.screen.capture(path);
   
   return path;
 }
@@ -72,7 +72,7 @@ async function takeScreenshot() {
 ```javascript
 await hlvm.app.spotlight.modules.add('screenshot', `
   export default async function() {
-    const choice = await hlvm.notification.confirm(
+    const choice = await hlvm.ui.notification.confirm(
       "Full screen?",
       "Screenshot"
     );
@@ -80,13 +80,13 @@ await hlvm.app.spotlight.modules.add('screenshot', `
     const path = \`/tmp/screen-\${Date.now()}.png\`;
     
     if (choice) {
-      await hlvm.screen.capture(path);
+      await hlvm.computer.screen.capture(path);
     } else {
-      await hlvm.screen.capture(path, { interactive: true });
+      await hlvm.computer.screen.capture(path, { interactive: true });
     }
     
-    await hlvm.clipboard.writeImage(path);
-    await hlvm.notification.notify("Screenshot copied!", "Done");
+    await hlvm.computer.clipboard.writeImage(path);
+    await hlvm.ui.notification.notify("Screenshot copied!", "Done");
   }
 `);
 ```
@@ -98,16 +98,16 @@ async function captureAndReadText() {
   const path = '/tmp/ocr-capture.png';
   
   // Capture area
-  await hlvm.screen.capture(path, { interactive: true });
+  await hlvm.computer.screen.capture(path, { interactive: true });
   
   // Use AI to extract text
-  const text = await hlvm.ollama.chat(
+  const text = await hlvm.ai.ollama.chat(
     "Extract all text from this image",
     { image: path }
   );
   
   // Copy to clipboard
-  await hlvm.clipboard.write(text);
+  await hlvm.computer.clipboard.write(text);
   
   return text;
 }
@@ -123,12 +123,12 @@ async function recordScreen(duration, fps = 1) {
   
   for (let i = 0; i < count; i++) {
     const path = `/tmp/frame-${i}.png`;
-    await hlvm.screen.capture(path);
+    await hlvm.computer.screen.capture(path);
     frames.push(path);
     await hlvm.system.sleep(interval);
   }
   
-  await hlvm.notification.notify(
+  await hlvm.ui.notification.notify(
     `Captured ${frames.length} frames`,
     "Recording Complete"
   );

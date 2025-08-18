@@ -113,10 +113,10 @@ await hlvm.keyboard.press("delete");
 ```javascript
 await hlvm.app.spotlight.modules.add('auto-type', `
   export default async function() {
-    const text = await hlvm.notification.prompt("Text to type:");
+    const text = await hlvm.ui.notification.prompt("Text to type:");
     if (!text) return;
     
-    await hlvm.notification.notify(
+    await hlvm.ui.notification.notify(
       "Click where you want to type. Starting in 3 seconds...",
       "Auto Type"
     );

@@ -1,4 +1,4 @@
-# hlvm.mouse
+# hlvm.computer.mouse
 
 Mouse control and automation.
 
@@ -9,7 +9,7 @@ Mouse control and automation.
 Get current mouse position.
 
 ```javascript
-const pos = await hlvm.mouse.position();
+const pos = await hlvm.computer.mouse.position();
 console.log(`Mouse at: ${pos.x}, ${pos.y}`);
 ```
 
@@ -22,7 +22,7 @@ console.log(`Mouse at: ${pos.x}, ${pos.y}`);
 Move mouse to position.
 
 ```javascript
-await hlvm.mouse.move(100, 200);
+await hlvm.computer.mouse.move(100, 200);
 ```
 
 **Parameters:**
@@ -39,13 +39,13 @@ Click at position.
 
 ```javascript
 // Left click
-await hlvm.mouse.click(100, 200);
+await hlvm.computer.mouse.click(100, 200);
 
 // Right click
-await hlvm.mouse.click(100, 200, { button: "right" });
+await hlvm.computer.mouse.click(100, 200, { button: "right" });
 
 // Double click
-await hlvm.mouse.click(100, 200, { clickCount: 2 });
+await hlvm.computer.mouse.click(100, 200, { clickCount: 2 });
 ```
 
 **Parameters:**
@@ -64,7 +64,7 @@ await hlvm.mouse.click(100, 200, { clickCount: 2 });
 Drag from one position to another.
 
 ```javascript
-await hlvm.mouse.drag(100, 100, 300, 300);
+await hlvm.computer.mouse.drag(100, 100, 300, 300);
 ```
 
 **Parameters:**
@@ -83,10 +83,10 @@ Scroll by delta amount.
 
 ```javascript
 // Scroll down
-await hlvm.mouse.scroll(0, -100);
+await hlvm.computer.mouse.scroll(0, -100);
 
 // Scroll up
-await hlvm.mouse.scroll(0, 100);
+await hlvm.computer.mouse.scroll(0, 100);
 ```
 
 **Parameters:**
@@ -100,26 +100,26 @@ await hlvm.mouse.scroll(0, 100);
 ### Basic Click
 
 ```javascript
-await hlvm.mouse.click(500, 300);
+await hlvm.computer.mouse.click(500, 300);
 ```
 
 ### Right Click Menu
 
 ```javascript
-await hlvm.mouse.click(400, 200, { button: "right" });
+await hlvm.computer.mouse.click(400, 200, { button: "right" });
 ```
 
 ### Double Click to Open
 
 ```javascript
-await hlvm.mouse.click(100, 100, { clickCount: 2 });
+await hlvm.computer.mouse.click(100, 100, { clickCount: 2 });
 ```
 
 ### Drag and Drop
 
 ```javascript
 // Drag file from one location to another
-await hlvm.mouse.drag(100, 100, 500, 400);
+await hlvm.computer.mouse.drag(100, 100, 500, 400);
 ```
 
 ### Mouse Position Tracker
@@ -129,7 +129,7 @@ async function trackMouse() {
   const positions = [];
   
   for (let i = 0; i < 10; i++) {
-    const pos = await hlvm.mouse.position();
+    const pos = await hlvm.computer.mouse.position();
     positions.push(pos);
     console.log(`Position ${i}: ${pos.x}, ${pos.y}`);
     await hlvm.system.sleep(1000);
@@ -142,19 +142,19 @@ async function trackMouse() {
 ### Click at Current Position
 
 ```javascript
-const pos = await hlvm.mouse.position();
-await hlvm.mouse.click(pos.x, pos.y);
+const pos = await hlvm.computer.mouse.position();
+await hlvm.computer.mouse.click(pos.x, pos.y);
 ```
 
 ### Draw Square
 
 ```javascript
 async function drawSquare(x, y, size) {
-  await hlvm.mouse.move(x, y);
-  await hlvm.mouse.drag(x, y, x + size, y);
-  await hlvm.mouse.drag(x + size, y, x + size, y + size);
-  await hlvm.mouse.drag(x + size, y + size, x, y + size);
-  await hlvm.mouse.drag(x, y + size, x, y);
+  await hlvm.computer.mouse.move(x, y);
+  await hlvm.computer.mouse.drag(x, y, x + size, y);
+  await hlvm.computer.mouse.drag(x + size, y, x + size, y + size);
+  await hlvm.computer.mouse.drag(x + size, y + size, x, y + size);
+  await hlvm.computer.mouse.drag(x, y + size, x, y);
 }
 
 await drawSquare(100, 100, 200);
@@ -165,28 +165,28 @@ await drawSquare(100, 100, 200);
 ```javascript
 await hlvm.app.spotlight.modules.add('auto-clicker', `
   export default async function() {
-    const count = await hlvm.notification.prompt(
+    const count = await hlvm.ui.notification.prompt(
       "Number of clicks:",
       "10"
     );
     
     if (!count) return;
     
-    await hlvm.notification.notify(
+    await hlvm.ui.notification.notify(
       "Position mouse and wait 3 seconds...",
       "Auto Clicker"
     );
     
     await hlvm.system.sleep(3000);
     
-    const pos = await hlvm.mouse.position();
+    const pos = await hlvm.computer.mouse.position();
     
     for (let i = 0; i < parseInt(count); i++) {
-      await hlvm.mouse.click(pos.x, pos.y);
+      await hlvm.computer.mouse.click(pos.x, pos.y);
       await hlvm.system.sleep(100);
     }
     
-    await hlvm.notification.notify("Done!", "Auto Clicker");
+    await hlvm.ui.notification.notify("Done!", "Auto Clicker");
   }
 `);
 ```
@@ -195,12 +195,12 @@ await hlvm.app.spotlight.modules.add('auto-clicker', `
 
 ```javascript
 async function smoothMove(toX, toY, steps = 10) {
-  const from = await hlvm.mouse.position();
+  const from = await hlvm.computer.mouse.position();
   const deltaX = (toX - from.x) / steps;
   const deltaY = (toY - from.y) / steps;
   
   for (let i = 1; i <= steps; i++) {
-    await hlvm.mouse.move(
+    await hlvm.computer.mouse.move(
       Math.round(from.x + deltaX * i),
       Math.round(from.y + deltaY * i)
     );
@@ -216,9 +216,9 @@ await smoothMove(500, 500);
 
 ```javascript
 async function selectArea(x1, y1, x2, y2) {
-  await hlvm.mouse.move(x1, y1);
+  await hlvm.computer.mouse.move(x1, y1);
   await hlvm.system.sleep(100);
-  await hlvm.mouse.drag(x1, y1, x2, y2);
+  await hlvm.computer.mouse.drag(x1, y1, x2, y2);
 }
 
 // Select area from (100,100) to (400,300)
