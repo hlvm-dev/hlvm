@@ -43,7 +43,7 @@ async function setupHLVMEnvironment(tempDir: string, pathSep: string) {
   
   // Create stdlib directory structure
   await Deno.mkdir(stdlibPath, { recursive: true });
-  const subdirs = ['core', 'fs', 'io', 'computer', 'ai', 'app'];
+  const subdirs = ['core', 'fs', 'io', 'computer', 'ai', 'ui'];
   for (const dir of subdirs) {
     await Deno.mkdir(`${stdlibPath}${pathSep}${dir}`, { recursive: true });
   }

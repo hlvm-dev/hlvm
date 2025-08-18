@@ -251,7 +251,9 @@ export async function load(name) {
     // Clean up after import
     setTimeout(() => Deno.remove(tempFile).catch(() => {}), 1000);
     
-    return imported;
+    // Return the default function directly if it exists, otherwise return the module
+    // This makes it more intuitive: const fn = await load('name'); await fn();
+    return imported.default || imported;
   } catch (e) {
     throw new Error(`Load failed: ${e.message}`);
   }

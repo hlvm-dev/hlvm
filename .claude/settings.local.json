@@ -94,7 +94,16 @@
       "Bash(open:*)",
       "Bash(/Users/seoksoonjang/Desktop/hlvm/hlvm save alert \"export default async function() { await hlvm.notification.alert(''Hello from Spotlight!'', ''Test''); return ''Alert shown''; }\")",
       "Bash(/Users/seoksoonjang/Desktop/hlvm/hlvm)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(osascript:*)",
+      "Bash(git lfs:*)",
+      "Bash(git add:*)",
+      "Bash(touch:*)",
+      "Bash(/tmp/test-ollama-comprehensive.js)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git remote add:*)",
+      "Bash(git rm:*)"
     ],
     "deny": [],
     "ask": [],

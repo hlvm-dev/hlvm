@@ -12,16 +12,39 @@ import * as screen from "./stdlib/computer/screen.js";
 import * as keyboard from "./stdlib/computer/keyboard.js";
 import * as mouse from "./stdlib/computer/mouse.js";
 import * as ollama from "./stdlib/ai/ollama.js";
-import { app } from "./stdlib/app/control.js";
+import { ui } from "./stdlib/ui/control.js";
 
 // Create hlvm namespace
 const hlvmBase = {
+  // Module management - generic for all UIs
+  modules: {
+    save: db.save,
+    remove: async (name) => {
+      // If no name given, remove ALL modules (nuke)
+      if (!name) {
+        const allModules = db.list();
+        for (const mod of allModules) {
+          await db.remove(mod.key);
+        }
+        console.log(`Removed all ${allModules.length} modules`);
+        return true;
+      }
+      // Otherwise remove specific module
+      return db.remove(name);
+    },
+    list: db.list,
+    load: db.load,
+    get: db.getSource,
+    has: async (name) => {
+      const modules = db.list();
+      return modules.some(m => m.key === name);
+    }
+  },
+  
   // Database access (for advanced users)
   db: Object.assign(db.db, {
     path: db.path,
     load: db.load,
-    list: db.list,
-    remove: db.remove,
     getSource: db.getSource
   }),
   
@@ -37,14 +60,13 @@ const hlvmBase = {
   keyboard,
   mouse,
   
-  // AI
+  // AI - Full Ollama API mirror
   ollama,
-  ask: ollama.chat, // Legacy shorthand
   
-  // App control (replaces __HLVM_COMMAND__)
-  // The macOS app runs a WebSocket server on port 11436
-  // hlvm.app connects as a CLIENT to control the GUI
-  app,
+  // UI control (replaces __HLVM_COMMAND__)
+  // The macOS GUI runs a WebSocket server on port 11436
+  // hlvm.ui connects as a CLIENT to control the GUI
+  ui,
   
   // Context - returns current clipboard content
   get context() {
@@ -58,11 +80,10 @@ HLVM - High-Level Virtual Machine
 ==================================
 
 Core Functions:
-  hlvm.save(name, code)     - Save ESM module or function
-  hlvm.list()               - List saved modules
-  hlvm.remove(name)         - Remove a module
-  hlvm.ask(prompt)          - Chat with Ollama
-  hlvm.db.load(name)        - Load module (advanced use)
+  hlvm.modules.save()       - Save module
+  hlvm.modules.remove()     - Remove module(s)
+  hlvm.modules.list()       - List modules
+  hlvm.modules.load()       - Load module
   hlvm.context              - Get current clipboard content
 
 System Control:
@@ -111,7 +132,7 @@ Examples:
   // Status
   status: () => {
     const modules = Object.keys(hlvm).filter(k => typeof hlvm[k] === 'object');
-    const savedModules = hlvm.list();
+    const savedModules = hlvm.modules.list();
     
     console.log('\nHLVM Status:');
     console.log('─'.repeat(40));
@@ -182,9 +203,9 @@ setupCustomPropertyPersistence();
 globalThis.hlvm = new Proxy(hlvmBase, {
   set(target, prop, value) {
     // List of system properties that cannot be overridden
-    const systemProps = ['db', 'platform', 'system', 'fs', 'clipboard', 'notification', 
-                        'screen', 'keyboard', 'mouse', 'ollama', 'app', 'context', 
-                        'help', 'status', 'ask'];
+    const systemProps = ['modules', 'db', 'platform', 'system', 'fs', 'clipboard', 'notification', 
+                        'screen', 'keyboard', 'mouse', 'ollama', 'ui', 'context', 
+                        'help', 'status'];
     
     if (systemProps.includes(prop)) {
       console.error(`Cannot override system property: hlvm.${prop}`);
@@ -213,3 +234,10 @@ globalThis.hlvm = new Proxy(hlvmBase, {
 
 // Global utilities
 globalThis.pprint = (obj) => console.log(JSON.stringify(obj, null, 2));
+
+// Global shorthand for core APIs - single source of truth
+Object.defineProperty(globalThis, 'context', {
+  get() { return hlvm.context; },
+  enumerable: true,
+  configurable: false
+});

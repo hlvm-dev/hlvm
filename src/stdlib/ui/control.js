@@ -1,4 +1,4 @@
-// App Control Module - Control macOS app via WebSocket
+// UI Control Module - Control macOS GUI via WebSocket
 // Replaces __HLVM_COMMAND__ strings with proper JSON-RPC calls
 
 let socket = null;
@@ -122,8 +122,8 @@ function handleNotification(method, params) {
   }
 }
 
-// App control commands (replacing __HLVM_COMMAND__ strings)
-export const app = {
+// UI control commands (replacing __HLVM_COMMAND__ strings)
+export const ui = {
   // Connection management
   connect,
   disconnect: () => {
@@ -144,35 +144,7 @@ export const app = {
     navigateOut: () => request("spotlight.navigateOut"),
     search: (query) => request("spotlight.search", { query }),
     
-    // Module management for Spotlight
-    modules: {
-      add: async (name, code) => {
-        // Import database module to save to modules table
-        const { save } = await import("../core/database.js");
-        return save(name, code);
-      },
-      
-      remove: async (name) => {
-        const { remove } = await import("../core/database.js");
-        return remove(name);
-      },
-      
-      list: async () => {
-        const { list } = await import("../core/database.js");
-        return list();
-      },
-      
-      get: async (name) => {
-        const { getSource } = await import("../core/database.js");
-        return getSource(name);
-      },
-      
-      has: async (name) => {
-        const { list } = await import("../core/database.js");
-        const modules = list();
-        return modules.some(m => m.key === name);
-      }
-    }
+    // Note: Module management moved to hlvm.modules for generic use
   },
   
   // Chat commands (replacing __HLVM_CHAT_*)
@@ -239,4 +211,4 @@ export const app = {
   notify
 };
 
-export default app;
+export default ui;

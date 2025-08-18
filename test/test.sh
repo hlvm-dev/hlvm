@@ -121,6 +121,7 @@ echo "CONTEXT FEATURE (1 property)"
 echo "════════════════════════════════════════════"
 
 run_test "hlvm.context" "await hlvm.clipboard.write('swift-code'); console.log(await hlvm.context)" "swift-code"
+run_test "global context" "await hlvm.clipboard.write('global-test'); console.log(await context)" "global-test"
 
 echo
 echo "════════════════════════════════════════════"
@@ -163,11 +164,46 @@ run_test "mouse.drag (type)" "console.log(typeof hlvm.mouse.drag)" "function"
 
 echo
 echo "════════════════════════════════════════════"
-echo "OLLAMA MODULE (2 functions)"
+echo "OLLAMA MODULE (12 functions)"
 echo "════════════════════════════════════════════"
 
-run_test "ollama.list (type)" "console.log(typeof hlvm.ollama.list)" "function"
+run_test "ollama.generate (type)" "console.log(typeof hlvm.ollama.generate)" "function"
 run_test "ollama.chat (type)" "console.log(typeof hlvm.ollama.chat)" "function"
+run_test "ollama.list (type)" "console.log(typeof hlvm.ollama.list)" "function"
+run_test "ollama.show (type)" "console.log(typeof hlvm.ollama.show)" "function"
+run_test "ollama.pull (type)" "console.log(typeof hlvm.ollama.pull)" "function"
+run_test "ollama.push (type)" "console.log(typeof hlvm.ollama.push)" "function"
+run_test "ollama.create (type)" "console.log(typeof hlvm.ollama.create)" "function"
+run_test "ollama.copy (type)" "console.log(typeof hlvm.ollama.copy)" "function"
+run_test "ollama.deleteModel (type)" "console.log(typeof hlvm.ollama.deleteModel)" "function"
+run_test "ollama.embeddings (type)" "console.log(typeof hlvm.ollama.embeddings)" "function"
+run_test "ollama.ps (type)" "console.log(typeof hlvm.ollama.ps)" "function"
+run_test "ollama.isRunning()" "console.log(await hlvm.ollama.isRunning())" "true\|false"
+
+# Test actual functionality with real model
+# Get first available model or use default
+MODEL_TEST='const m = (await hlvm.ollama.list()).models[0]?.name || "qwen3:0.6b"'
+
+run_test "ollama.isRunning check" "console.log(await hlvm.ollama.isRunning())" "true\|false"
+
+run_test "ollama.list() returns models" "const r = await hlvm.ollama.list(); console.log(Array.isArray(r.models))" "true"
+
+run_test "ollama.ps() returns models" "const r = await hlvm.ollama.ps(); console.log(Array.isArray(r.models))" "true"
+
+# Use actual available model for tests
+run_test "ollama.generate() completion" "${MODEL_TEST}; const r = await hlvm.ollama.generate({ model: m, prompt: 'OK', stream: false }); console.log(typeof r.response)" "string"
+
+run_test "ollama.generate() streaming" "${MODEL_TEST}; const s = await hlvm.ollama.generate({ model: m, prompt: 'Hi', stream: true }); console.log(typeof s.next)" "function"
+
+run_test "ollama.chat() completion" "${MODEL_TEST}; const r = await hlvm.ollama.chat({ model: m, messages: [{role: 'user', content: 'Hi'}], stream: false }); console.log(r.message ? true : false)" "true"
+
+run_test "ollama.chat() streaming" "${MODEL_TEST}; const s = await hlvm.ollama.chat({ model: m, messages: [{role: 'user', content: 'Hi'}], stream: true }); console.log(typeof s.next)" "function"
+
+run_test "ollama.show() model info" "${MODEL_TEST}; const r = await hlvm.ollama.show({ name: m }); console.log(r.license || r.modelfile || r.parameters ? true : false)" "true"
+
+run_test "streaming yields chunks" "${MODEL_TEST}; const s = await hlvm.ollama.generate({ model: m, prompt: 'Hi', stream: true }); let c = 0; for await (const chunk of s) { c++; if (c > 2) break; } console.log(c > 0)" "true"
+
+run_test "error handling" "try { await hlvm.ollama.generate({ model: 'fake-xyz', prompt: 'test', stream: false }); console.log(false); } catch(e) { console.log(e.message.includes('not found')); }" "true"
 
 echo
 echo "════════════════════════════════════════════"
