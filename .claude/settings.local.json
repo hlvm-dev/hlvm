@@ -117,7 +117,20 @@
       "Bash(/Users/seoksoonjang/Desktop/hlvm/src/embed-stdlib.ts)",
       "Bash(./test/test-cli.sh:*)",
       "Bash(./resources/deno --version)",
-      "Bash(./resources/deno repl --quiet --eval-file=/tmp/simple-proxy-test.js)"
+      "Bash(./resources/deno repl --quiet --eval-file=/tmp/simple-proxy-test.js)",
+      "Bash(/tmp/test-ollama-cleanup2.js)",
+      "Bash(/tmp/test-repl-cleanup.sh:*)",
+      "Bash(/tmp/test-interrupt.sh:*)",
+      "Bash(/tmp/test-hlvm-cleanup.sh:*)",
+      "Bash(git stash:*)",
+      "Bash(./scripts/bundle-model.sh:*)",
+      "Bash(./scripts/embed-model.sh:*)",
+      "Bash(cp:*)",
+      "Bash(tar:*)",
+      "Bash(./test-hlvm:*)",
+      "Bash(time:*)",
+      "Bash(DEBUG=1 timeout 1 ./hlvm)",
+      "Bash(/tmp/test-observe-comprehensive.js)"
     ],
     "deny": [],
     "ask": [],
@@ -125,7 +138,10 @@
       "/Users/seoksoonjang/Library",
       "/private/tmp",
       "/private/var/folders/sx/68vz7m857jngsy2_8w_djflw0000gn/T",
-      "/Users/seoksoonjang/.deno"
+      "/Users/seoksoonjang/.deno",
+      "/Users/seoksoonjang/Desktop/resources",
+      "/Users/seoksoonjang/.ollama",
+      "/private/var/folders/sx"
     ]
   }
 }

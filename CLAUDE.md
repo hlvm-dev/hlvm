@@ -17,6 +17,65 @@
 - Mark deprecated APIs clearly
 - Test all examples before documenting
 
+## Self-Documenting REPL API Requirements
+
+### EVERY Public Function MUST Have JSDoc Documentation
+
+**All public functions in HLVM must include JSDoc comments for self-documentation in the REPL.**
+
+When users type a function name in the REPL (without calling it), they should see:
+- Function signature
+- Description
+- Parameters with types
+- Return value
+- Examples with expected output
+
+**Required JSDoc Format:**
+```javascript
+/**
+ * Brief description of what the function does
+ * @param {type} paramName - Parameter description
+ * @param {type} [optionalParam] - Optional parameter description
+ * @returns {Promise<type>} Return value description
+ * @example
+ * await functionName("input")
+ * // → "expected output"
+ * @example
+ * await functionName("input2", {option: "value"})
+ * // → "different output"
+ */
+export async function functionName(param, optionalParam = {}) {
+  // implementation
+}
+```
+
+**Implementation Pattern:**
+
+For functions that need runtime initialization, add documentation setup:
+
+```javascript
+// At module level, after function definitions:
+function initializeDocs() {
+  functionName.__doc__ = `formatted documentation string`;
+  functionName[Symbol.for('Deno.customInspect')] = function() {
+    return this.__doc__;
+  };
+}
+
+initializeDocs(); // Call on module load
+```
+
+**REPL Experience:**
+```javascript
+> hlvm.stdlib.ai.revise
+// Shows full documentation with examples
+
+> hlvm.core.io.fs.read
+// Shows file reading documentation
+```
+
+This makes the API self-discoverable - users can explore functionality without leaving the REPL or checking external documentation.
+
 ## HLVM Testing Requirements
 
 ### The Master Test
@@ -125,3 +184,17 @@ Current public APIs that need documentation:
 - WebSocket Bridge API (port 11436, JSON-RPC)
 
 Documentation should follow the style of https://github.com/ollama/ollama/blob/main/docs/api.md
+
+## Important Instructions
+
+**DO ONLY WHAT IS ASKED. DO NOT CREATE FILES OR DOCUMENTATION UNLESS EXPLICITLY REQUESTED.**
+
+When user asks to inspect or analyze code/structure:
+- Analyze and respond with findings
+- DO NOT create new documentation files
+- DO NOT write files unless explicitly asked
+
+When user provides a task:
+- Complete ONLY that specific task
+- Do not add extra features or documentation
+- Do not create files beyond what was requested

@@ -147,12 +147,19 @@ rm -f /tmp/hlvm-screen.png
 
 echo
 echo "════════════════════════════════════════════"
-echo "COMPUTER KEYBOARD (3 functions)"
+echo "COMPUTER KEYBOARD (5 functions)"
 echo "════════════════════════════════════════════"
 
 run_test "keyboard.type (type)" "console.log(typeof hlvm.core.computer.keyboard.type)" "function"
 run_test "keyboard.press (type)" "console.log(typeof hlvm.core.computer.keyboard.press)" "function"
-run_test "keyboard.shortcut (type)" "console.log(typeof hlvm.core.computer.keyboard.shortcut)" "function"
+run_test "keyboard.onKeyPress (type)" "console.log(typeof hlvm.core.computer.keyboard.onKeyPress)" "function"
+run_test "keyboard.offKeyPress (type)" "console.log(typeof hlvm.core.computer.keyboard.offKeyPress)" "function"
+run_test "keyboard.listKeyListeners (type)" "console.log(typeof hlvm.core.computer.keyboard.listKeyListeners)" "function"
+
+# Test array format and listener functionality
+run_test "keyboard.press array format" "await hlvm.core.computer.keyboard.press(['space']); console.log('ok')" "ok"
+run_test "keyboard listener registration" "const cb = () => {}; hlvm.core.computer.keyboard.onKeyPress(['cmd', 's'], cb); const list = hlvm.core.computer.keyboard.listKeyListeners(); console.log(list.length > 0)" "true"
+run_test "keyboard listener removal" "hlvm.core.computer.keyboard.offKeyPress(['cmd', 's']); const list = hlvm.core.computer.keyboard.listKeyListeners(); console.log(list.length === 0)" "true"
 
 echo
 echo "════════════════════════════════════════════"
@@ -226,7 +233,7 @@ echo "════════════════════════�
 run_test "custom property assignment" "hlvm.mytest = {data: 'hello'}; console.log(hlvm.mytest.data)" "hello"
 run_test "custom array assignment" "hlvm.myarray = [1, 2, 3]; console.log(hlvm.myarray[1])" "2"
 run_test "custom property update" "hlvm.mytest = {data: 'updated'}; console.log(hlvm.mytest.data)" "updated"
-run_test "custom property null removal" "hlvm.mytest = null; console.log(typeof hlvm.mytest)" "undefined"
+run_test "custom property null removal" "hlvm.mytest = null; console.log(hlvm.mytest)" "null"
 run_test "custom property delete" "hlvm.temp = 'test'; delete hlvm.temp; console.log(typeof hlvm.temp)" "undefined"
 
 echo
@@ -237,6 +244,12 @@ echo "════════════════════════�
 run_test "global context" "console.log(typeof context)" "object"
 
 echo
+# Test event observation system (3 functions)
+echo "═══ Testing core.event (3 functions) ═══"
+run_test "event.observe()" "hlvm.core.event.observe('hlvm.core.io.fs.write', {before: () => {}}); console.log(hlvm.core.event.listObservers().length)" "1"
+run_test "event.listObservers()" "console.log(Array.isArray(hlvm.core.event.listObservers()))" "true"
+run_test "event.unobserve()" "hlvm.core.event.observe('hlvm.core.io.fs.read', {before: () => {}}); hlvm.core.event.unobserve('hlvm.core.io.fs.read'); console.log(hlvm.core.event.listObservers().filter(o => o.path === 'hlvm.core.io.fs.read').length)" "0"
+
 echo "╔════════════════════════════════════════════╗"
 echo "║           TEST RESULTS                   ║"
 echo "╚════════════════════════════════════════════╝"

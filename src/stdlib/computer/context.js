@@ -84,7 +84,6 @@ export const context = {
   get selection() {
     // This is synchronous but internally uses cached async result
     // For now, we'll make it async and users need to await
-    console.warn("Note: context.selection requires await");
     return getSelectedText();
   },
   
@@ -172,7 +171,6 @@ export const context = {
         
         // Extract text via OCR (this would be async in real implementation)
         // For now return a sync placeholder
-        console.warn("Note: OCR is experimental and requires platform support");
         return "[Screen text extraction pending implementation]";
       } catch (error) {
         console.error("Failed to extract screen text:", error.message);

@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: If you use HLVM in your work, please cite it as below.
+title: HLVM - High-Level Virtual Machine
+abstract: Cross-platform automation runtime with local AI integration.
+authors:
+  - family-names: Jang
+    given-names: Seoksoon
+    orcid: https://orcid.org/0000-0000-0000-0000
+identifiers:
+  - type: url
+    value: https://github.com/hlvm-dev/hlvm
+repository-code: https://github.com/hlvm-dev/hlvm
+license: MIT
+year: 2025
+version: 0.0.6
+keywords:
+  - automation
+  - deno
+  - local-ai
+  - ollama

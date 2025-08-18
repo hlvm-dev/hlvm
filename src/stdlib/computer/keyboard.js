@@ -1,7 +1,11 @@
-// Keyboard module - Cross-platform keyboard automation
+// Keyboard module - Cross-platform keyboard automation with unified array format
+// Array format: ["cmd", "shift", "a"] where last element is the key, rest are modifiers
 
 import * as platform from "../core/platform.js";
 import { escapeKeyboard, powershell, linuxTool, PS, ERRORS } from "../core/platform.js";
+
+// Global keyboard event listeners storage
+const keyListeners = new Map();
 
 export async function type(text) {
   const escapedText = escapeKeyboard(text);
@@ -69,6 +73,11 @@ const KEY_MAP = {
     windows: "{ESC}", 
     linux: "Escape" 
   },
+  "esc": { 
+    darwin: "escape", 
+    windows: "{ESC}", 
+    linux: "Escape" 
+  },
   "space": { 
     darwin: "space", 
     windows: " ", 
@@ -116,7 +125,39 @@ const KEY_MAP = {
   }
 };
 
-export async function press(key, modifiers = {}) {
+// Helper to normalize keys array
+function normalizeKeys(keys) {
+  // Only accept array format
+  if (!Array.isArray(keys)) {
+    throw new Error('Keyboard functions require array format: ["cmd", "s"] or ["enter"]');
+  }
+  
+  // Normalize modifier names
+  return keys.map(k => {
+    const lower = k.toLowerCase();
+    // Normalize common variations
+    if (lower === 'command' || lower === 'meta' || lower === 'super') return 'cmd';
+    if (lower === 'control') return 'ctrl';
+    if (lower === 'option') return 'alt';
+    return lower;
+  });
+}
+
+// Get string representation of keys for Map key
+function getKeyString(keys) {
+  const normalized = normalizeKeys(keys);
+  return normalized.sort().join('+');
+}
+
+// Updated press function that accepts array format only
+export async function press(keys) {
+  // Only array format is supported
+  const normalized = normalizeKeys(keys);
+  
+  // Extract key and modifiers from normalized array
+  const key = normalized[normalized.length - 1];
+  const modifiers = normalized.slice(0, -1);
+  
   // Normalize key name
   const normalizedKey = key.toLowerCase();
   const keyMapping = KEY_MAP[normalizedKey] || {
@@ -128,10 +169,10 @@ export async function press(key, modifiers = {}) {
   if (platform.isDarwin) {
     // macOS: osascript with modifiers
     const mods = [];
-    if (modifiers.cmd || modifiers.command) mods.push("command down");
-    if (modifiers.ctrl || modifiers.control) mods.push("control down");
-    if (modifiers.alt || modifiers.option) mods.push("option down");
-    if (modifiers.shift) mods.push("shift down");
+    if (modifiers.includes('cmd')) mods.push("command down");
+    if (modifiers.includes('ctrl')) mods.push("control down");
+    if (modifiers.includes('alt')) mods.push("option down");
+    if (modifiers.includes('shift')) mods.push("shift down");
     
     const keyName = keyMapping.darwin;
     const script = mods.length > 0
@@ -149,53 +190,101 @@ export async function press(key, modifiers = {}) {
     
   } else if (platform.isWindows) {
     // Windows: PowerShell SendKeys with modifiers
-    let keys = "";
-    if (modifiers.ctrl || modifiers.control) keys += "^";
-    if (modifiers.alt) keys += "%";
-    if (modifiers.shift) keys += "+";
-    keys += keyMapping.windows;
+    let keysStr = "";
+    if (modifiers.includes('ctrl')) keysStr += "^";
+    if (modifiers.includes('alt')) keysStr += "%";
+    if (modifiers.includes('shift')) keysStr += "+";
+    keysStr += keyMapping.windows;
     
     const script = `
       ${PS.forms}
-      [System.Windows.Forms.SendKeys]::SendWait("${keys}")
+      [System.Windows.Forms.SendKeys]::SendWait("${keysStr}")
     `;
     await powershell(script);
     
   } else {
     // Linux: xdotool or ydotool
-    const keys = [];
-    if (modifiers.ctrl || modifiers.control) keys.push("ctrl");
-    if (modifiers.alt) keys.push("alt");
-    if (modifiers.shift) keys.push("shift");
-    if (modifiers.cmd || modifiers.command || modifiers.super) keys.push("super");
-    keys.push(keyMapping.linux);
+    const linuxKeys = [];
+    if (modifiers.includes('ctrl')) linuxKeys.push("ctrl");
+    if (modifiers.includes('alt')) linuxKeys.push("alt");
+    if (modifiers.includes('shift')) linuxKeys.push("shift");
+    if (modifiers.includes('cmd')) linuxKeys.push("super");
+    linuxKeys.push(keyMapping.linux);
     
     await linuxTool(
-      ["key", keys.join("+")], // xdotool args
-      ["key", ...keys], // ydotool args
+      ["key", linuxKeys.join("+")], // xdotool args
+      ["key", ...linuxKeys], // ydotool args
       ERRORS.LINUX_TOOLS
     );
   }
 }
 
-// Send keyboard shortcut (convenience function)
-export async function shortcut(keys) {
-  // Parse shortcut like "cmd+a" or "ctrl+shift+t"
-  const parts = keys.toLowerCase().split("+");
-  const modifiers = {};
-  let key = "";
+// Register a global keyboard shortcut listener
+export function onKeyPress(keys, callback) {
+  const keyString = getKeyString(keys);
   
-  for (const part of parts) {
-    if (["cmd", "command", "ctrl", "control", "alt", "option", "shift", "super"].includes(part)) {
-      if (part === "cmd" || part === "command") modifiers.cmd = true;
-      if (part === "ctrl" || part === "control") modifiers.ctrl = true;
-      if (part === "alt" || part === "option") modifiers.alt = true;
-      if (part === "shift") modifiers.shift = true;
-      if (part === "super") modifiers.super = true;
-    } else {
-      key = part;
-    }
+  // Store the callback
+  if (!keyListeners.has(keyString)) {
+    keyListeners.set(keyString, []);
+  }
+  keyListeners.get(keyString).push(callback);
+  
+  // Platform-specific global hotkey registration would go here
+  // For now, this is a stub that stores the callbacks for future implementation
+  
+  if (platform.isDarwin) {
+    // TODO: Use native macOS APIs or a tool like hammerspoon
+    console.warn('Global keyboard shortcuts not yet implemented. Callback registered for future use.');
+  } else if (platform.isWindows) {
+    // TODO: Use Windows hooks or AutoHotkey
+    console.warn('Global keyboard shortcuts not yet implemented. Callback registered for future use.');
+  } else {
+    // TODO: Use X11 or Wayland APIs
+    console.warn('Global keyboard shortcuts not yet implemented. Callback registered for future use.');
   }
   
-  return press(key, modifiers);
+  return true;
+}
+
+// Unregister a global keyboard shortcut listener
+export function offKeyPress(keys, callback) {
+  const keyString = getKeyString(keys);
+  
+  if (!keyListeners.has(keyString)) {
+    return false;
+  }
+  
+  const callbacks = keyListeners.get(keyString);
+  
+  if (callback) {
+    // Remove specific callback
+    const index = callbacks.indexOf(callback);
+    if (index > -1) {
+      callbacks.splice(index, 1);
+    }
+    
+    // Clean up if no callbacks left
+    if (callbacks.length === 0) {
+      keyListeners.delete(keyString);
+    }
+  } else {
+    // Remove all callbacks for this key combination
+    keyListeners.delete(keyString);
+  }
+  
+  // Platform-specific deregistration would go here
+  
+  return true;
+}
+
+// List all registered keyboard shortcuts
+export function listKeyListeners() {
+  const result = [];
+  for (const [keyString, callbacks] of keyListeners.entries()) {
+    result.push({
+      keys: keyString.split('+'),
+      callbackCount: callbacks.length
+    });
+  }
+  return result;
 }

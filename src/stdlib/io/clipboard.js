@@ -2,6 +2,13 @@
 
 import * as platform from "../core/platform.js";
 
+/**
+ * Reads text from system clipboard
+ * @returns {Promise<string>} Clipboard text content
+ * @example
+ * await read()
+ * // → "Hello from clipboard"
+ */
 export async function read() {
   if (platform.isDarwin) {
     // macOS: pbpaste (built-in)
@@ -43,6 +50,14 @@ export async function read() {
   }
 }
 
+/**
+ * Writes text to system clipboard
+ * @param {string} text - Text to write to clipboard
+ * @returns {Promise<void>}
+ * @example
+ * await write("Hello clipboard")
+ * // → Text copied to clipboard
+ */
 export async function write(text) {
   if (platform.isDarwin) {
     // macOS: pbcopy (built-in)
@@ -93,7 +108,14 @@ export async function write(text) {
   }
 }
 
-// Check if clipboard is available
+/**
+ * Checks if clipboard operations are available
+ * @returns {Promise<boolean>} True if clipboard is available
+ * @example
+ * await isAvailable()
+ * // → true (on macOS/Windows)
+ * // → false (on Linux without xclip/xsel)
+ */
 export async function isAvailable() {
   try {
     if (platform.isDarwin || platform.isWindows) {

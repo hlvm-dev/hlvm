@@ -2,7 +2,8 @@
 
 // HLVM REPL - Direct SQLite version (no proxy server needed)
 
-import { embeddedStdlib, embeddedInit, embeddedBridge } from "./embedded-stdlib.ts";
+import { embeddedStdlib, embeddedInit, embeddedBridge, EMBEDDED_MODEL } from "./embedded-stdlib.ts";
+import { HLVM_VERSION } from "./version.ts";
 
 // Configuration constants
 class Config {
@@ -21,12 +22,24 @@ class BinaryExtractor {
       return targetPath;
     }
     
+    // Show progress only when actually extracting
+    console.log(`\x1b[36m⏳ Extracting ${name} runtime...\x1b[0m`);
+    
     // Try embedded extraction
     const extracted = await this.extractEmbedded(targetPath, resourcePath);
-    if (extracted) return extracted;
+    if (extracted) {
+      console.log(`\x1b[32m✓ ${name} ready\x1b[0m`);
+      return extracted;
+    }
     
     // Fallback to development mode
-    return this.getDevelopmentPath(resourcePath);
+    const devPath = this.getDevelopmentPath(resourcePath);
+    if (await this.isValidBinary(devPath)) {
+      console.log(`\x1b[33m⚠ Using development ${name} binary\x1b[0m`);
+      return devPath;
+    }
+    
+    throw new Error(`Failed to extract ${name} binary. Neither embedded nor development binary found.`);
   }
 
   private static async isValidBinary(path: string): Promise<boolean> {
@@ -62,6 +75,7 @@ class EnvironmentSetup {
     const initScriptPath = `${Config.tempDir}${Config.pathSep}hlvm-init.js`;
     const stdlibPath = `${Config.tempDir}${Config.pathSep}stdlib`;
     
+    // ALWAYS extract fresh - no cache
     await this.createDirectoryStructure(stdlibPath);
     await this.writeStdlibModules(stdlibPath);
     await this.writeBridge();
@@ -69,6 +83,7 @@ class EnvironmentSetup {
     
     return initScriptPath;
   }
+
 
   private static async createDirectoryStructure(stdlibPath: string): Promise<void> {
     await Deno.mkdir(stdlibPath, { recursive: true });
@@ -81,9 +96,9 @@ class EnvironmentSetup {
 
   private static async writeStdlibModules(stdlibPath: string): Promise<void> {
     for (const [modulePath, moduleCode] of Object.entries(embeddedStdlib)) {
-      await Deno.writeTextFile(`${stdlibPath}${Config.pathSep}${modulePath}`, moduleCode);
+      const filePath = `${stdlibPath}${Config.pathSep}${modulePath}`;
+      await Deno.writeTextFile(filePath, moduleCode);
     }
-    
   }
 
   private static async writeBridge(): Promise<void> {
@@ -91,7 +106,8 @@ class EnvironmentSetup {
   }
 
   private static async writeInitScript(initScriptPath: string, stdlibPath: string): Promise<void> {
-    let initCode = embeddedInit;
+    // Set global EMBEDDED_MODEL at the beginning of init code
+    let initCode = `globalThis.EMBEDDED_MODEL = "${EMBEDDED_MODEL}";\n` + embeddedInit;
     initCode = initCode.replace(/from "\.\/stdlib\//g, `from "${stdlibPath}/`);
     initCode = initCode.replace(/"..\/(src\/)?hlvm-bridge\.ts"/g, `"${Config.tempDir}${Config.pathSep}hlvm-bridge.ts"`);
     await Deno.writeTextFile(initScriptPath, initCode);
@@ -127,6 +143,13 @@ class CommandHandler {
       case "save":
         await this.handleSave();
         break;
+      case "revise":
+        await this.handleRevise();
+        break;
+      case "list":
+      case "commands":
+        this.showCommands();
+        break;
       case "--help":
       case "-h":
         this.showHelp();
@@ -136,36 +159,37 @@ class CommandHandler {
     }
   }
 
-  private static async handleDeno(): Promise<void> {
-    const denoPath = await BinaryExtractor.extract('deno', Config.denoPath, '../resources/deno');
-    const denoArgs = Deno.args.slice(1);
-    
-    const process = new Deno.Command(denoPath, {
-      args: denoArgs,
+  private static async spawnAndExit(binaryPath: string, args: string[], env?: Record<string, string>): Promise<void> {
+    const process = new Deno.Command(binaryPath, {
+      args,
       stdout: "inherit",
       stderr: "inherit",
       stdin: "inherit",
-      env: Deno.env.toObject(),
+      env: env || Deno.env.toObject(),
     }).spawn();
     
     const status = await process.status;
     Deno.exit(status.code);
   }
 
+  private static async handleDeno(): Promise<void> {
+    try {
+      const denoPath = await BinaryExtractor.extract('deno', Config.denoPath, '../resources/deno');
+      await this.spawnAndExit(denoPath, Deno.args.slice(1));
+    } catch (error) {
+      console.error(`\x1b[31m✗ Failed to run Deno: ${error.message}\x1b[0m`);
+      Deno.exit(1);
+    }
+  }
+
   private static async handleOllama(): Promise<void> {
-    const ollamaPath = await BinaryExtractor.extract('ollama', Config.ollamaPath, '../resources/ollama');
-    const ollamaArgs = Deno.args.slice(1);
-    
-    const process = new Deno.Command(ollamaPath, {
-      args: ollamaArgs,
-      env: this.getOllamaEnv(),
-      stdout: "inherit",
-      stderr: "inherit",
-      stdin: "inherit",
-    }).spawn();
-    
-    const status = await process.status;
-    Deno.exit(status.code);
+    try {
+      const ollamaPath = await BinaryExtractor.extract('ollama', Config.ollamaPath, '../resources/ollama');
+      await this.spawnAndExit(ollamaPath, Deno.args.slice(1), this.getOllamaEnv());
+    } catch (error) {
+      console.error(`\x1b[31m✗ Failed to run Ollama: ${error.message}\x1b[0m`);
+      Deno.exit(1);
+    }
   }
 
   private static getOllamaEnv(): Record<string, string> {
@@ -180,8 +204,15 @@ class CommandHandler {
   private static async handleSave(): Promise<void> {
     const [, name, ...rest] = Deno.args;
     
+    // Check for help flag
+    if (name === '--help' || name === '-h' || rest.includes('--help')) {
+      this.showSaveHelp();
+      return;
+    }
+    
     if (!name || rest.length === 0) {
       console.error("Usage: hlvm save <name> <file-or-code>");
+      console.error("Run 'hlvm save --help' for more information");
       Deno.exit(1);
     }
     
@@ -200,18 +231,174 @@ class CommandHandler {
     Deno.exit(0);
   }
 
+  private static async handleRevise(): Promise<void> {
+    const [, ...rest] = Deno.args;
+    
+    // Check for help flag
+    if (rest.includes('--help') || rest.includes('-h')) {
+      this.showReviseHelp();
+      return;
+    }
+    
+    const args = rest.join(' ').trim();
+    
+    // Parse tone option if provided
+    let tone = 'default';
+    let text = args;
+    
+    // Check for tone flags
+    if (args.startsWith('--')) {
+      const match = args.match(/^--(\w+)\s+(.*)/);
+      if (match) {
+        tone = match[1];
+        text = match[2];
+      }
+    }
+    
+    // Setup environment and load hlvm
+    const initScriptPath = await EnvironmentSetup.setup();
+    await import(initScriptPath);
+    
+    try {
+      // If no text provided, use clipboard
+      if (!text) {
+        text = await globalThis.hlvm.core.io.clipboard.read();
+        if (!text) {
+          console.error("No text provided and clipboard is empty");
+          console.error("Usage: hlvm revise [--tone] <text>");
+          console.error("       hlvm revise [--tone]  (uses clipboard)");
+          console.error("Tones: --professional, --casual, --friendly, --concise, --formal");
+          Deno.exit(1);
+        }
+      }
+      
+      // Call the revise function
+      const revised = await globalThis.hlvm.stdlib.ai.revise(text, { tone });
+      
+      // Output the revised text
+      console.log(revised);
+      
+      // Also copy to clipboard for convenience
+      await globalThis.hlvm.core.io.clipboard.write(revised);
+      
+    } catch (error) {
+      console.error(`❌ Revision failed: ${error.message}`);
+      Deno.exit(1);
+    }
+    
+    Deno.exit(0);
+  }
+
+  private static showSaveHelp(): void {
+    console.log(`hlvm save - Save JavaScript module to registry
+
+Usage:
+  hlvm save <name> <file>         Save a file as a module
+  hlvm save <name> "<code>"       Save inline code as a module
+  
+Options:
+  --help, -h                      Show this help
+  
+Description:
+  Saves JavaScript code or files to HLVM's module registry for reuse.
+  Modules can be loaded in REPL with hlvm.core.storage.modules.load(name)
+  
+Examples:
+  hlvm save utils ./utils.js
+  hlvm save greet "export default (name) => 'Hello ' + name"
+  hlvm save cleanup ./scripts/cleanup.js
+  
+In REPL:
+  const utils = await hlvm.core.storage.modules.load('utils')
+  hlvm.core.storage.modules.list()  // List all saved modules`);
+    Deno.exit(0);
+  }
+
+  private static showReviseHelp(): void {
+    console.log(`hlvm revise - AI-powered text revision
+
+Usage:
+  hlvm revise [--tone] <text>     Revise the provided text
+  hlvm revise [--tone]             Revise text from clipboard
+  
+Tone Options:
+  --professional                   Business/formal communication
+  --casual                         Relaxed and conversational  
+  --friendly                       Warm and approachable
+  --concise                        Brief and to the point
+  --formal                         Academic/formal style
+  
+Options:
+  --help, -h                       Show this help
+  
+Description:
+  Uses AI to improve text clarity, fix grammar/spelling, and adjust tone.
+  If no text is provided, reads from clipboard.
+  Revised text is automatically copied to clipboard.
+  
+Examples:
+  hlvm revise "thx for ur help"
+  hlvm revise --professional "hey can u send me the files"
+  hlvm revise --concise              # Revises clipboard content
+  echo "text" | pbcopy && hlvm revise --friendly`);
+    Deno.exit(0);
+  }
+
+  private static showCommands(): void {
+    console.log(`HLVM CLI Commands
+═══════════════════
+
+Core Commands:
+  hlvm                    Start REPL interactive session
+  hlvm save               Save JavaScript module to registry
+  hlvm revise             AI-powered text revision
+  hlvm list/commands      Show this command list
+  hlvm --help/-h          Show detailed help
+
+Pass-through Commands:
+  hlvm deno <cmd>         Execute any Deno command
+  hlvm ollama <cmd>       Execute any Ollama command
+
+Examples:
+  hlvm                                      # Start REPL
+  hlvm save utils ./utils.js                # Save module
+  hlvm revise "thx 4 ur help"              # Revise text
+  hlvm revise --professional                # Revise clipboard with tone
+  hlvm deno run --allow-all script.ts      # Run TypeScript
+  hlvm ollama pull llama3.2                # Download model
+  hlvm ollama list                         # List models
+
+Documentation:
+  Deno commands: https://docs.deno.com/runtime/manual
+  Ollama commands: https://github.com/ollama/ollama/blob/main/docs/api.md`);
+    Deno.exit(0);
+  }
+
   private static showHelp(): void {
     console.log(`HLVM - High-Level Virtual Machine
     
-Usage:
-  hlvm                           Start REPL
-  hlvm save <name> <file|code>   Save module to registry
-  hlvm ollama serve              Start Ollama AI server
-  hlvm --help                    Show this help
+Usage: hlvm <command> [options]
+
+Commands:
+  hlvm                    Start REPL interactive session
+  hlvm save               Save JavaScript module to registry  
+  hlvm revise             AI-powered text revision
+  hlvm list               Show all available commands
+  hlvm deno <cmd>         Run Deno commands
+  hlvm ollama <cmd>       Run Ollama commands
+  
+Options:
+  --help, -h              Show help for a command
+  
+Get Help:
+  hlvm <command> --help   Show detailed help for specific command
+  hlvm list               List all available commands
   
 Examples:
-  hlvm save cleanup ./cleanup.js
-  hlvm save greet "export default function(name) { return 'Hello ' + name; }"`);
+  hlvm                    Start REPL
+  hlvm save --help        Show save command help
+  hlvm revise --help      Show revise command help
+  hlvm revise "text"      Revise text with AI`);
     Deno.exit(0);
   }
 
@@ -226,20 +413,41 @@ Examples:
 class REPLManager {
   private ollamaProcess?: Deno.ChildProcess;
   private replProcess?: Deno.ChildProcess;
+  private isOllamaExternal = false;
 
   async start(): Promise<void> {
-    const denoPath = await BinaryExtractor.extract('deno', Config.denoPath, '../resources/deno');
-    const ollamaPath = await BinaryExtractor.extract('ollama', Config.ollamaPath, '../resources/ollama');
-    
-    this.startOllamaService(ollamaPath);
-    const initScriptPath = await this.setupEnvironment();
-    
-    this.showBanner();
-    await this.startREPL(denoPath, initScriptPath);
-    await this.cleanup();
+    try {
+      const denoPath = await BinaryExtractor.extract('deno', Config.denoPath, '../resources/deno');
+      const ollamaPath = await BinaryExtractor.extract('ollama', Config.ollamaPath, '../resources/ollama');
+      
+      // Setup cleanup on exit signals
+      Deno.addSignalListener("SIGINT", () => this.cleanup().then(() => Deno.exit(0)));
+      Deno.addSignalListener("SIGTERM", () => this.cleanup().then(() => Deno.exit(0)));
+      
+      await this.startOllamaService(ollamaPath);
+      const initScriptPath = await this.setupEnvironment();
+      
+      this.showBanner();
+      await this.startREPL(denoPath, initScriptPath);
+      await this.cleanup();
+    } catch (error) {
+      console.error(`\x1b[31m✗ Failed to start HLVM: ${error.message}\x1b[0m`);
+      await this.cleanup();
+      Deno.exit(1);
+    }
   }
 
-  private startOllamaService(ollamaPath: string): void {
+  private async startOllamaService(ollamaPath: string): Promise<void> {
+    // Only start if not already running
+    try {
+      const response = await fetch("http://127.0.0.1:11434/api/tags");
+      if (response.ok) {
+        this.isOllamaExternal = true;
+        return; // Already running, nothing to do
+      }
+    } catch {}
+    
+    // Start our own Ollama service
     this.ollamaProcess = new Deno.Command(ollamaPath, {
       args: ["serve"],
       env: {
@@ -249,12 +457,14 @@ class REPLManager {
       stdout: "null",
       stderr: "null",
     }).spawn();
+    
+    // Wait for startup
+    await new Promise(resolve => setTimeout(resolve, 500));
   }
 
   private async setupEnvironment(): Promise<string> {
     try {
       const path = await EnvironmentSetup.setup();
-      console.log("✓ Extracted embedded stdlib modules to temp directory");
       return path;
     } catch (e) {
       console.error("Failed to extract stdlib:", e);
@@ -277,10 +487,8 @@ ${colors.purple}╔════════════════════�
 ║       ╩ ╩╩═╝ ╚╝ ╩ ╩         ║
 ║                              ║
 ║  High-Level Virtual Machine  ║
-║         ${colors.red}Version 2.0${colors.purple}          ║
+║       ${colors.red}Version ${HLVM_VERSION}${colors.purple}        ║
 ╚══════════════════════════════╝${colors.reset}
-
-${colors.dim}Direct SQLite Edition - No Proxy Server${colors.reset}
 `);
     
     Deno.env.set("DENO_REPL_PROMPT", `${colors.purple}> ${colors.reset}`);
@@ -288,28 +496,40 @@ ${colors.dim}Direct SQLite Edition - No Proxy Server${colors.reset}
   }
 
   private async startREPL(denoPath: string, initScriptPath: string): Promise<void> {
-    const repl = new Deno.Command(denoPath, {
-      args: ["repl", "--quiet", "--allow-all", `--eval-file=${initScriptPath}`],
-      stdin: "inherit",
-      stdout: "inherit",
-      stderr: "inherit",
-      env: {
-        ...Deno.env.toObject(),
-        "FORCE_COLOR": "1",
-      }
-    });
+    try {
+      const repl = new Deno.Command(denoPath, {
+        args: ["repl", "--quiet", "--allow-all", `--eval-file=${initScriptPath}`],
+        stdin: "inherit",
+        stdout: "inherit",
+        stderr: "inherit",
+        env: {
+          ...Deno.env.toObject(),
+          "FORCE_COLOR": "1",
+        }
+      });
 
-    this.replProcess = repl.spawn();
-    
-    this.replProcess.status.then(() => this.cleanup());
-    await this.replProcess.status;
+      this.replProcess = repl.spawn();
+      const status = await this.replProcess.status;
+      
+      if (!status.success) {
+        console.error(`\x1b[31m✗ REPL exited with code ${status.code}\x1b[0m`);
+      }
+    } catch (error) {
+      console.error(`\x1b[31m✗ Failed to start REPL: ${error.message}\x1b[0m`);
+      throw error;
+    }
   }
 
   private async cleanup(): Promise<void> {
-    if (this.ollamaProcess) {
-      try { 
-        this.ollamaProcess.kill();
-      } catch {}
+    // Only kill Ollama if we started it (not external)
+    if (this.ollamaProcess && !this.isOllamaExternal) {
+      try {
+        this.ollamaProcess.kill("SIGTERM");
+        await new Promise(resolve => setTimeout(resolve, 100));
+        this.ollamaProcess.kill("SIGKILL");
+      } catch {
+        // Process already dead, that's fine
+      }
     }
   }
 }

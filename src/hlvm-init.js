@@ -1,6 +1,10 @@
 // HLVM Initialization - Clean Mediator
 // Imports all stdlib modules and exposes them through the hlvm namespace
 
+// Enable async spinner for all promises in REPL (disabled for now)
+// import asyncSpinner from "./stdlib/core/async-spinner.js";
+// asyncSpinner.enableAsyncSpinner();
+
 // Import all stdlib modules from organized structure
 import * as platform from "./stdlib/core/platform.js";
 import * as system from "./stdlib/core/system.js";
@@ -14,6 +18,15 @@ import * as mouse from "./stdlib/computer/mouse.js";
 import * as ollama from "./stdlib/ai/ollama.js";
 import ui from "./stdlib/ui/control.js";
 import { context as computerContext } from "./stdlib/computer/context.js";
+
+// Import stdlib AI module
+import * as stdlibAI from "./stdlib/ai.js";
+
+// Import core event module
+import * as event from "./stdlib/core/event.js";
+
+// Import environment settings module
+import * as env from "./stdlib/core/env.js";
 
 // Create hlvm namespace inside IIFE to hide from global scope
 globalThis.hlvm = (() => {
@@ -88,17 +101,17 @@ globalThis.hlvm = (() => {
             return modules.some(m => m.key === name);
           },
           
-          // Shortcut management - permanent global shortcuts
-          shortcut: async (name, path) => {
-            // Remove shortcut if path is null
+          // Alias management - permanent global aliases
+          alias: async (name, path) => {
+            // Remove alias if path is null
             if (path === null || path === undefined) {
-              return removeShortcut(name);
+              return removeAlias(name);
             }
-            return createShortcut(name, path);
+            return createAlias(name, path);
           },
-          shortcuts: () => listShortcuts(),
-          removeShortcut: (name) => removeShortcut(name),
-          updateShortcut: (name, path) => createShortcut(name, path)
+          aliases: () => listAliases(),
+          removeAlias: (name) => removeAlias(name),
+          updateAlias: (name, path) => createAlias(name, path)
         }
       },
       
@@ -134,7 +147,9 @@ globalThis.hlvm = (() => {
         keyboard: {
           type: keyboard.type,
           press: keyboard.press,
-          shortcut: keyboard.shortcut
+          onKeyPress: keyboard.onKeyPress,
+          offKeyPress: keyboard.offKeyPress,
+          listKeyListeners: keyboard.listKeyListeners
         },
         mouse: {
           move: mouse.move,
@@ -163,16 +178,30 @@ globalThis.hlvm = (() => {
       // AI - AI services
       ai: {
         ollama: ollama
+      },
+      
+      // Event - observation system
+      event: {
+        observe: event.observe,
+        unobserve: event.unobserve,
+        listObservers: event.listObservers
       }
     },
     
     // LAYER 2: App control (top-level, not core!)
     app: ui,
     
-    // LAYER 3: High-level stdlib (empty for now, will add high-level functions later)
+    // LAYER 3: High-level stdlib
     stdlib: {
-      // Future: ask(), fix(), translate(), summarize(), etc.
+      ai: {
+        revise: stdlibAI.revise,
+        draw: stdlibAI.draw,
+        refactor: stdlibAI.refactor
+      }
     },
+    
+    // Environment settings (persistent configuration)
+    env: env,
     
     // Context - returns context object (keep at root for convenience)
     get context() {
@@ -197,6 +226,7 @@ CORE MODULES:
   hlvm.core.computer        - Automation (keyboard, mouse, screen)
   hlvm.core.ui              - User interface (notifications)
   hlvm.core.ai              - AI services (ollama)
+  hlvm.core.event           - Observation system (observe, unobserve)
 
 STORAGE & MODULES:
   hlvm.core.storage.modules.save()    - Save module
@@ -215,7 +245,7 @@ FILE OPERATIONS:
 
 COMPUTER AUTOMATION:
   hlvm.core.computer.keyboard.type()  - Type text
-  hlvm.core.computer.keyboard.press() - Press keys
+  hlvm.core.computer.keyboard.press() - Press keys (array format: ["cmd", "s"])
   hlvm.core.computer.mouse.click()    - Click mouse
   hlvm.core.computer.mouse.move()     - Move mouse
   hlvm.core.computer.screen.capture() - Capture screen
@@ -247,7 +277,7 @@ Examples:
   const response = await hlvm.core.ai.ollama.chat({ 
     model: 'llama3', 
     prompt: 'Hello' 
-  })
+  }
     `);
   },
   
@@ -261,17 +291,17 @@ Examples:
     console.log('Top-level:', modules.join(', '));
     console.log(`Saved Modules: ${savedModules.length} modules`);
     console.log(`Database: ${hlvmBase.core.storage.db.path}`);
-    console.log(`Platform: ${hlvmBase.core.system.os} (${hlvmBase.core.system.arch})`);
+    console.log(`Platform: ${hlvmBase.core.system.os} (${hlvmBase.core.system.arch}`);
     console.log(`Temp Dir: ${hlvmBase.core.system.tempDir()}`);
     console.log(`Home Dir: ${hlvmBase.core.system.homeDir()}`);
   }
   };
 
-  // Setup shortcut persistence
-  function setupShortcuts() {
-    // Create shortcuts table if not exists
+  // Setup alias persistence
+  function setupAliases() {
+    // Create aliases table if not exists
     db.db.exec(`
-    CREATE TABLE IF NOT EXISTS shortcuts (
+    CREATE TABLE IF NOT EXISTS aliases (
       name TEXT PRIMARY KEY,
       path TEXT NOT NULL,
       created_at INTEGER NOT NULL,
@@ -279,19 +309,19 @@ Examples:
     )
   `);
   
-  // Load existing shortcuts and create global functions
-  const shortcuts = db.db.prepare('SELECT * FROM shortcuts').all();
-  shortcuts.forEach(shortcut => {
+  // Load existing aliases and create global functions
+  const aliases = db.db.prepare('SELECT * FROM aliases').all();
+  aliases.forEach(alias => {
     try {
-      // Create the global shortcut function
-      globalThis[shortcut.name] = async (...args) => {
+      // Create the global alias function
+      globalThis[alias.name] = async (...args) => {
         // Navigate the path to find the function
-        const parts = shortcut.path.split('.');
+        const parts = alias.path.split('.');
         let current = globalThis;
         for (const part of parts) {
           current = current[part];
           if (!current) {
-            throw new Error(`Path ${shortcut.path} not found`);
+            throw new Error(`Path ${alias.path} not found`);
           }
         }
         
@@ -302,13 +332,13 @@ Examples:
         return current;
       };
     } catch (e) {
-      console.error(`Failed to restore shortcut '${shortcut.name}':`, e.message);
+      console.error(`Failed to restore alias '${alias.name}':`, e.message);
     }
   });
 }
 
-  // Create a shortcut
-  function createShortcut(name, path) {
+  // Create an alias
+  function createAlias(name, path) {
   // Validate name doesn't conflict with system
   const reserved = ['hlvm', 'Deno', 'console', 'global', 'globalThis', 'window', 
                     'document', 'alert', 'confirm', 'prompt', 'eval', 'Function',
@@ -316,13 +346,13 @@ Examples:
                     'Math', 'Date', 'RegExp', 'Error', 'JSON', 'Promise'];
   
   if (reserved.includes(name)) {
-    throw new Error(`Cannot use reserved name '${name}' for shortcut`);
+    throw new Error(`Cannot use reserved name '${name}' for alias`);
   }
   
   // Save to database
   const now = Date.now();
   db.db.prepare(`
-    INSERT OR REPLACE INTO shortcuts (name, path, created_at, updated_at)
+    INSERT OR REPLACE INTO aliases (name, path, created_at, updated_at)
     VALUES (?, ?, ?, ?)
   `).run(name, path, now, now);
   
@@ -343,26 +373,26 @@ Examples:
     return current;
   };
   
-  console.log(`✅ Created shortcut: ${name}() → ${path}`);
+  console.log(`✅ Created alias: ${name}() → ${path}`);
   return true;
 }
 
-  // Remove a shortcut
-  function removeShortcut(name) {
+  // Remove an alias
+  function removeAlias(name) {
   // Remove from database
-  db.db.prepare('DELETE FROM shortcuts WHERE name = ?').run(name);
+  db.db.prepare('DELETE FROM aliases WHERE name = ?').run(name);
   
   // Remove from global scope
   delete globalThis[name];
   
-  console.log(`✅ Removed shortcut: ${name}`);
+  console.log(`✅ Removed alias: ${name}`);
   return true;
 }
 
-  // List all shortcuts
-  function listShortcuts() {
-  const shortcuts = db.db.prepare('SELECT * FROM shortcuts ORDER BY name').all();
-  return shortcuts.map(s => ({
+  // List all aliases
+  function listAliases() {
+  const aliases = db.db.prepare('SELECT * FROM aliases ORDER BY name').all();
+  return aliases.map(s => ({
     name: s.name,
     path: s.path,
     createdAt: new Date(s.created_at),
@@ -388,9 +418,9 @@ Examples:
     try {
       if (prop.type === 'function') {
         // Recreate function from string
-        hlvmBase[prop.key] = eval(`(${prop.value})`);
+        cleanHlvm[prop.key] = eval(`(${prop.value})`);
       } else {
-        hlvmBase[prop.key] = JSON.parse(prop.value);
+        cleanHlvm[prop.key] = JSON.parse(prop.value);
       }
     } catch (e) {
       console.error(`Failed to restore custom property '${prop.key}':`, e.message);
@@ -421,15 +451,24 @@ Examples:
   `).run(key, serialized, type, Date.now());
 }
 
-  // Setup persistence
-  setupShortcuts();
+  // Create a clean object without Object.prototype for better tab completion
+  // This prevents showing methods like valueOf, toString, etc.
+  const cleanHlvm = Object.create(null);
+  
+  // Copy all properties from hlvmBase to cleanHlvm
+  for (const key in hlvmBase) {
+    cleanHlvm[key] = hlvmBase[key];
+  }
+  
+  // Setup persistence (must be after cleanHlvm is created)
+  setupAliases();
   setupCustomPropertyPersistence();
 
-  // Add custom property setter directly to the object
+  // Add custom property setter directly to the clean object
   // This preserves TAB completion while allowing custom properties
-  Object.defineProperty(hlvmBase, '__set', {
+  Object.defineProperty(cleanHlvm, '__set', {
     value: function(prop, value) {
-      const systemProps = ['core', 'app', 'stdlib', 'context', 'help', 'status', '__set', '__delete'];
+      const systemProps = ['core', 'app', 'stdlib', 'env', 'context', 'help', 'status', '__set', '__delete'];
       
       if (systemProps.includes(prop)) {
         console.error(`Cannot override system property: hlvm.${prop}`);
@@ -451,7 +490,7 @@ Examples:
     configurable: false
   });
   
-  Object.defineProperty(hlvmBase, '__delete', {
+  Object.defineProperty(cleanHlvm, '__delete', {
     value: function(prop) {
       // Remove from database
       db.db.prepare('DELETE FROM custom_properties WHERE key = ?').run(prop);
@@ -462,17 +501,43 @@ Examples:
     configurable: false
   });
 
-  // Return the plain object for TAB completion to work
-  return hlvmBase;
+  // Return the clean object for TAB completion to work
+  return cleanHlvm;
 })();  // End IIFE - hlvmBase is now hidden from global scope
 
 // Global utilities
 globalThis.pprint = (obj) => console.log(JSON.stringify(obj, null, 2));
 
+// Setup custom inspect for functions with documentation
+(function setupFunctionDocs() {
+  // Create a special inspect symbol for documented functions
+  const inspectSymbol = Symbol.for('Deno.customInspect');
+  
+  // Helper to attach docs to a function
+  globalThis.__attachDocs = function(func, doc) {
+    func.__doc__ = doc;
+    func[inspectSymbol] = function() {
+      return this.__doc__;
+    };
+    return func;
+  };
+  
+  // Process all functions in hlvm namespace to add inspect if they have __doc__
+  function processObject(obj, path = '') {
+    for (const key in obj) {
+      const value = obj[key];
+      if (typeof value === 'function' && value.__doc__) {
+        value[inspectSymbol] = function() {
+          return this.__doc__;
+        };
+      } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        processObject(value, path ? `${path}.${key}` : key);
+      }
+    }
+  }
+  
+  // Process the hlvm namespace after a small delay to ensure all modules are loaded
+  setTimeout(() => processObject(globalThis.hlvm), 100);
+})();
 
-// Global shorthand for context
-Object.defineProperty(globalThis, 'context', {
-  get() { return hlvm.context; },
-  enumerable: true,
-  configurable: false
-});
+// Global shorthand for context - removed to prevent startup issues
