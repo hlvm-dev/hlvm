@@ -49,31 +49,31 @@ class HLVMBridge {
 
     // Module handlers (keep existing functionality)
     this.handlers.set("modules.list", async () => {
-      // Call existing hlvm.list() function
-      if (globalThis.hlvm?.list) {
-        return await globalThis.hlvm.list();
+      // Call existing hlvm.modules.list() function
+      if (globalThis.hlvm?.modules?.list) {
+        return globalThis.hlvm.modules.list();
       }
       return [];
     });
 
     this.handlers.set("modules.save", async (params) => {
-      if (globalThis.hlvm?.save) {
-        return await globalThis.hlvm.save(params.name, params.code);
+      if (globalThis.hlvm?.modules?.save) {
+        return await globalThis.hlvm.modules.save(params.name, params.code);
       }
       throw new Error("Module save not available");
     });
 
     this.handlers.set("modules.load", async (params) => {
-      if (globalThis.hlvm?.db?.load) {
-        return await globalThis.hlvm.db.load(params.name);
+      if (globalThis.hlvm?.modules?.load) {
+        return await globalThis.hlvm.modules.load(params.name);
       }
       throw new Error("Module load not available");
     });
 
     // AI handlers
     this.handlers.set("ai.generate", async (params) => {
-      if (globalThis.hlvm?.ollama?.chat) {
-        return await globalThis.hlvm.ollama.chat(params.prompt, params.model);
+      if (globalThis.hlvm?.ai?.ollama?.chat) {
+        return await globalThis.hlvm.ai.ollama.chat(params.prompt, params.model);
       }
       throw new Error("AI not available");
     });

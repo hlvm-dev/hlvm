@@ -11,7 +11,7 @@ HLVM (High-Level Virtual Machine) is a JavaScript runtime with embedded Deno and
 // Create a module (available in Spotlight)
 await hlvm.modules.save('hello', `
   export default function() {
-    return hlvm.notification.alert("Hello from HLVM!");
+    return hlvm.ui.notification.alert("Hello from HLVM!");
   }
 `);
 
@@ -19,32 +19,65 @@ await hlvm.modules.save('hello', `
 const hello = await hlvm.modules.load('hello');
 await hello();
 
-// Or find in Spotlight: Cmd+Space, type "hello", click to run
+// Or find in Spotlight (macOS): Cmd+Space, type "hello", click to run
+```
+
+## API Structure
+
+```
+hlvm
+├── modules         # Module management
+├── platform        # Platform information
+├── system          # System utilities
+├── fs              # File system operations
+├── repl            # REPL utilities
+│   └── history     # Command history
+├── computer        # Device control
+│   ├── mouse       # Mouse automation
+│   ├── keyboard    # Keyboard automation
+│   ├── screen      # Screen capture
+│   ├── clipboard   # Clipboard operations
+│   └── context     # Current context
+├── ui              # User interface
+│   └── notification # Alerts and notifications
+├── ai              # AI services
+│   └── ollama      # LLM integration
+└── app             # GUI app control (when running)
 ```
 
 ## API Reference
 
-Each `hlvm.*` namespace has its own documentation:
-
+### Core Modules
 - [**hlvm.modules**](modules.md) - Module management
-- [**hlvm.ui**](ui.md) - UI control (GUI, Spotlight, chat, etc.)
-- [**hlvm.clipboard**](clipboard.md) - Clipboard operations
-- [**hlvm.db**](db.md) - Database access and module loading
-- [**hlvm.fs**](fs.md) - File system operations
-- [**hlvm.keyboard**](keyboard.md) - Keyboard automation
-- [**hlvm.mouse**](mouse.md) - Mouse control
-- [**hlvm.notification**](notification.md) - Alerts and notifications
-- [**hlvm.ollama**](ollama.md) - AI/LLM integration
 - [**hlvm.platform**](platform.md) - Platform information
-- [**hlvm.screen**](screen.md) - Screen capture
 - [**hlvm.system**](system.md) - System utilities
+- [**hlvm.fs**](fs.md) - File system operations
+- [**hlvm.repl**](repl-history.md) - REPL history and utilities
+
+### Computer Control
+- [**hlvm.computer.clipboard**](computer/clipboard.md) - Clipboard operations
+- [**hlvm.computer.keyboard**](computer/keyboard.md) - Keyboard automation
+- [**hlvm.computer.mouse**](computer/mouse.md) - Mouse control
+- [**hlvm.computer.screen**](computer/screen.md) - Screen capture
+
+### User Interface
+- [**hlvm.ui.notification**](ui/notification.md) - Alerts and notifications
+
+### AI Services
+- [**hlvm.ai.ollama**](ai/ollama.md) - AI/LLM integration
+
+### App Control
+- [**hlvm.app**](app.md) - GUI app control (Spotlight, chat, etc.)
+
+### Persistence
+- [**Custom Properties**](persistence.md) - Persistent data storage (`hlvm.myData = ...`)
 
 ## Module Patterns
 
 ### Direct Execution
 ```javascript
 // Runs immediately when loaded
-await hlvm.notification.notify("Hello!", "HLVM");
+await hlvm.ui.notification.notify("Hello!", "HLVM");
 console.log("Module loaded");
 ```
 
@@ -52,7 +85,7 @@ console.log("Module loaded");
 ```javascript
 // Runs when function is called
 export default async function() {
-  const name = await hlvm.notification.prompt("Name?");
+  const name = await hlvm.ui.notification.prompt("Name?");
   return `Hello ${name}`;
 }
 ```
@@ -94,9 +127,9 @@ hlvm.myData = null;
 ```javascript
 await hlvm.modules.save('note', `
   export default async function() {
-    const note = await hlvm.notification.prompt("Note:");
+    const note = await hlvm.ui.notification.prompt("Note:");
     await hlvm.fs.write(\`/tmp/note-\${Date.now()}.txt\`, note);
-    await hlvm.notification.notify("Saved!", "Note");
+    await hlvm.ui.notification.notify("Saved!", "Note");
   }
 `);
 ```
@@ -106,9 +139,9 @@ await hlvm.modules.save('note', `
 await hlvm.modules.save('screenshot', `
   export default async function() {
     const path = \`/tmp/screenshot-\${Date.now()}.png\`;
-    await hlvm.screen.capture(path, { interactive: true });
-    await hlvm.clipboard.writeImage(path);
-    await hlvm.notification.notify("Copied!", "Screenshot");
+    await hlvm.computer.screen.capture(path, { interactive: true });
+    await hlvm.computer.clipboard.writeImage(path);
+    await hlvm.ui.notification.notify("Copied!", "Screenshot");
   }
 `);
 ```
@@ -117,10 +150,10 @@ await hlvm.modules.save('screenshot', `
 ```javascript
 await hlvm.modules.save('ai', `
   export default async function() {
-    const q = await hlvm.notification.prompt("Ask AI:");
-    const a = await hlvm.ollama.chat(q);
-    await hlvm.clipboard.write(a);
-    await hlvm.notification.alert(a, "AI");
+    const q = await hlvm.ui.notification.prompt("Ask AI:");
+    const a = await hlvm.ai.ollama.chat(q);
+    await hlvm.computer.clipboard.write(a);
+    await hlvm.ui.notification.alert(a, "AI");
   }
 `);
 ```
@@ -138,10 +171,10 @@ pprint(obj)    // Pretty print JSON
 
 | Feature | macOS | Windows | Linux |
 |---------|-------|---------|-------|
-| Spotlight | ✅ | ❌ | ❌ |
+| Spotlight Integration | ✅ | ❌ | ❌ |
 | Notifications | ✅ | ✅ | ✅ |
 | File System | ✅ | ✅ | ✅ |
 | Clipboard | ✅ | ✅ | ✅ |
 | Screen Capture | ✅ | ✅ | ✅ |
-| Automation | ✅ | ✅ | ✅ |
-| Ollama | ✅ | ✅ | ✅ |
+| Keyboard/Mouse | ✅ | ✅ | ✅ |
+| AI (Ollama) | ✅ | ✅ | ✅ |

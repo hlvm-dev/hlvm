@@ -103,13 +103,16 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(git remote add:*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(./build.sh)",
+      "Bash(sed:*)"
     ],
     "deny": [],
     "ask": [],
     "additionalDirectories": [
       "/Users/seoksoonjang/Library",
-      "/private/tmp"
+      "/private/tmp",
+      "/private/var/folders/sx/68vz7m857jngsy2_8w_djflw0000gn/T"
     ]
   }
 }

@@ -1,8 +1,7 @@
 // Keyboard module - Cross-platform keyboard automation
 
 import * as platform from "../core/platform.js";
-import { escapeKeyboard } from "../core/utils.js";
-import { powershell, linuxTool, PS, ERRORS } from "../core/exec.js";
+import { escapeKeyboard, powershell, linuxTool, PS, ERRORS } from "../core/platform.js";
 
 export async function type(text) {
   const escapedText = escapeKeyboard(text);

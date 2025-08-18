@@ -10,6 +10,20 @@ const exeExt = Deno.build.os === "windows" ? ".exe" : "";
 const DENO_PATH = `${tempDir}${pathSep}hlvm-deno${exeExt}`;
 const OLLAMA_PATH = `${tempDir}${pathSep}hlvm-ollama${exeExt}`;
 
+// Database path function
+function dbPath() {
+  const homeDir = Deno.env.get("HOME") || Deno.env.get("USERPROFILE") || "";
+  if (Deno.build.os === "darwin") {
+    return `${homeDir}/Library/Application Support/HLVM/HLVM.sqlite`;
+  } else if (Deno.build.os === "windows") {
+    const appData = Deno.env.get("APPDATA") || `${homeDir}\\AppData\\Roaming`;
+    return `${appData}\\HLVM\\HLVM.sqlite`;
+  } else {
+    const xdgData = Deno.env.get("XDG_DATA_HOME") || `${homeDir}/.local/share`;
+    return `${xdgData}/HLVM/HLVM.sqlite`;
+  }
+}
+
 async function extractBinary(name: string, targetPath: string, resourcePath: string): Promise<string> {
   try {
     // Check if already extracted and valid
@@ -224,19 +238,90 @@ Deno.env.set("DENO_REPL_PROMPT", `${PURPLE}> ${RESET}`);
 // Show ready message only for REPL mode
 console.log("HLVM ready. Type 'hlvm.help()' for help.");
 
-// Run Deno REPL with init script
+// Create pipes for stdin interception
 const repl = new Deno.Command(denoPath, {
   args: ["repl", "--quiet", "--allow-all", "--eval-file=" + initScriptPath],
-  stdin: "inherit",
+  stdin: "piped",  // We control stdin
   stdout: "inherit", 
   stderr: "inherit",
   env: {
     ...Deno.env.toObject(),
     "FORCE_COLOR": "1",
+    "HLVM_HISTORY_DB": dbPath()
   }
 });
 
 const replProcess = repl.spawn();
+
+// Function to save to history directly
+async function saveToHistory(command: string) {
+  try {
+    const { DatabaseSync } = await import("node:sqlite");
+    const db = new DatabaseSync(dbPath());
+    
+    // Ensure table exists
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS repl_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        command TEXT NOT NULL,
+        timestamp INTEGER NOT NULL
+      )
+    `);
+    
+    // Don't save empty or duplicate consecutive commands
+    const lastRow = db.prepare(
+      "SELECT command FROM repl_history ORDER BY timestamp DESC LIMIT 1"
+    ).get() as any;
+    
+    if (command.trim() && command !== lastRow?.command) {
+      db.prepare(
+        "INSERT INTO repl_history (command, timestamp) VALUES (?, ?)"
+      ).run(command.trim(), Date.now());
+    }
+    
+    db.close();
+  } catch {
+    // Ignore errors
+  }
+}
+
+// Use stream tee to forward stdin while capturing for history
+const [stream1, stream2] = Deno.stdin.readable.tee();
+
+// Forward one stream directly to REPL (no processing, no delay)
+stream1.pipeTo(replProcess.stdin);
+
+// Use second stream for history capture (async, non-blocking)
+(async () => {
+  const decoder = new TextDecoder();
+  const reader = stream2.getReader();
+  let buffer = "";
+  
+  while (true) {
+    try {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      const text = decoder.decode(value, { stream: true });
+      buffer += text;
+      
+      // Check for complete lines
+      if (buffer.includes('\n')) {
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || "";
+        
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed && !trimmed.startsWith('>') && !trimmed.startsWith('✓')) {
+            await saveToHistory(line);
+          }
+        }
+      }
+    } catch {
+      // Ignore errors in history capture
+    }
+  }
+})();
 
 // Handle exit
 replProcess.status.then(() => {
