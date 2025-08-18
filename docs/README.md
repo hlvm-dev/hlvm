@@ -46,17 +46,21 @@ hlvm
 
 ## API Reference
 
+### 📚 [Complete API Reference](api-reference.md)
+Comprehensive documentation of all HLVM modules with examples.
+
 ### Core Modules
 - [**hlvm.modules**](modules.md) - Module management & shortcuts
 - [**hlvm.platform**](platform.md) - Platform information
 - [**hlvm.system**](system.md) - System utilities
-- [**hlvm.computer.fs**](fs.md) - File system operations
+- [**hlvm.fs**](fs.md) - File system operations
 
 ### Computer Control
 - [**hlvm.computer.clipboard**](computer/clipboard.md) - Clipboard operations
 - [**hlvm.computer.keyboard**](computer/keyboard.md) - Keyboard automation
 - [**hlvm.computer.mouse**](computer/mouse.md) - Mouse control
 - [**hlvm.computer.screen**](computer/screen.md) - Screen capture
+- [**hlvm.computer.context**](context.md) - System context and selection
 
 ### User Interface
 - [**hlvm.ui.notification**](ui/notification.md) - Alerts and notifications
@@ -70,6 +74,7 @@ hlvm
 ### Additional Features
 - [**Shortcuts**](shortcuts.md) - Create permanent global shortcuts
 - [**Custom Properties**](persistence.md) - Persistent data storage (`hlvm.myData = ...`)
+- [**Database Access**](db.md) - Direct SQLite database access
 
 ## Module Patterns
 

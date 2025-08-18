@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# HLVM Test Suite - Tests REPL functions
+# HLVM Test Suite - Tests REPL functions with new hlvm.core.* structure
 # Tests actual functionality, not just type checks
 
 echo "╔══════════════════════════════════════════╗"
@@ -44,179 +44,173 @@ run_test() {
 }
 
 echo "════════════════════════════════════════════"
-echo "PLATFORM MODULE (11 functions)"
+echo "SYSTEM MODULE (18 functions)"
 echo "════════════════════════════════════════════"
 
-run_test "platform.os" "console.log(hlvm.platform.os)" "darwin\|linux\|windows"
-run_test "platform.arch" "console.log(hlvm.platform.arch)" "x86_64\|aarch64\|arm64"
-run_test "platform.version" "console.log(typeof hlvm.platform.version)" "string"
-run_test "platform.isDarwin" "console.log(typeof hlvm.platform.isDarwin)" "boolean"
-run_test "platform.isWindows" "console.log(typeof hlvm.platform.isWindows)" "boolean"
-run_test "platform.isLinux" "console.log(typeof hlvm.platform.isLinux)" "boolean"
-run_test "platform.tempDir()" "console.log(hlvm.platform.tempDir().includes('/'))" "true"
-run_test "platform.homeDir()" "console.log(hlvm.platform.homeDir().startsWith('/'))" "true"
-run_test "platform.pathSep" "console.log(hlvm.platform.pathSep)" "/\|\\\\\\\\"
-run_test "platform.exeExt" "console.log(hlvm.platform.exeExt.length >= 0)" "true"
-run_test "platform.shell()" "console.log(Array.isArray(hlvm.platform.shell()))" "true"
-
-echo
-echo "════════════════════════════════════════════"
-echo "SYSTEM MODULE (7 functions)"
-echo "════════════════════════════════════════════"
-
-run_test "system.hostname()" "console.log((await hlvm.system.hostname()).length > 0)" "true"
-run_test "system.exec()" "const r = await hlvm.system.exec('echo test'); console.log(r.stdout.trim())" "test"
-run_test "system.exit (type)" "console.log(typeof hlvm.system.exit)" "function"
-run_test "system.pid()" "console.log(hlvm.system.pid() > 0)" "true"
-run_test "system.cwd()" "console.log(hlvm.system.cwd().includes('/'))" "true"
-run_test "system.chdir()" "const orig = hlvm.system.cwd(); hlvm.system.chdir('/tmp'); const changed = hlvm.system.cwd(); hlvm.system.chdir(orig); console.log(changed)" "/tmp"
-run_test "system.env()" "console.log(hlvm.system.env('HOME').startsWith('/'))" "true"
+run_test "system.os" "console.log(hlvm.core.system.os)" "darwin\|linux\|windows"
+run_test "system.arch" "console.log(hlvm.core.system.arch)" "x86_64\|aarch64\|arm64"
+run_test "system.version" "console.log(typeof hlvm.core.system.version)" "string"
+run_test "system.isDarwin" "console.log(typeof hlvm.core.system.isDarwin)" "boolean"
+run_test "system.isWindows" "console.log(typeof hlvm.core.system.isWindows)" "boolean"
+run_test "system.isLinux" "console.log(typeof hlvm.core.system.isLinux)" "boolean"
+run_test "system.tempDir()" "console.log(hlvm.core.system.tempDir().includes('/'))" "true"
+run_test "system.homeDir()" "console.log(hlvm.core.system.homeDir().startsWith('/'))" "true"
+run_test "system.pathSep" "console.log(hlvm.core.system.pathSep)" "/\|\\\\\\\\"
+run_test "system.exeExt" "console.log(hlvm.core.system.exeExt.length >= 0)" "true"
+run_test "system.shell()" "console.log(Array.isArray(hlvm.core.system.shell()))" "true"
+run_test "system.hostname()" "console.log((await hlvm.core.system.hostname()).length > 0)" "true"
+run_test "system.exec()" "const r = await hlvm.core.system.exec('echo test'); console.log(r.stdout.trim())" "test"
+run_test "system.exit (type)" "console.log(typeof hlvm.core.system.exit)" "function"
+run_test "system.pid()" "console.log(hlvm.core.system.pid() > 0)" "true"
+run_test "system.cwd()" "console.log(hlvm.core.system.cwd().includes('/'))" "true"
+run_test "system.chdir()" "const orig = hlvm.core.system.cwd(); hlvm.core.system.chdir('/tmp'); const changed = hlvm.core.system.cwd(); hlvm.core.system.chdir(orig); console.log(changed)" "/tmp"
+run_test "system.env()" "console.log(hlvm.core.system.env('HOME').startsWith('/'))" "true"
 
 echo
 echo "════════════════════════════════════════════"
-echo "MODULES MANAGEMENT (6 functions)"
+echo "STORAGE MODULES (6 functions)"
 echo "════════════════════════════════════════════"
 
-run_test "modules.save()" "await hlvm.modules.save('testmod', 'export default 42'); console.log('saved')" "saved"
-run_test "modules.load()" "const m = await hlvm.modules.load('testmod'); console.log(m)" "42"
-run_test "modules.list()" "const l = hlvm.modules.list(); console.log(l.some(m => m.key === 'testmod'))" "true"
-run_test "modules.has()" "console.log(await hlvm.modules.has('testmod'))" "true"
-run_test "modules.get()" "const src = await hlvm.modules.get('testmod'); console.log(src.includes('42'))" "true"
-run_test "modules.remove()" "await hlvm.modules.remove('testmod'); console.log(await hlvm.modules.has('testmod'))" "false"
+run_test "modules.save()" "await hlvm.core.storage.modules.save('testmod', 'export default 42'); console.log('saved')" "saved"
+run_test "modules.load()" "const m = await hlvm.core.storage.modules.load('testmod'); console.log(m)" "42"
+run_test "modules.list()" "const l = hlvm.core.storage.modules.list(); console.log(l.some(m => m.key === 'testmod'))" "true"
+run_test "modules.has()" "console.log(await hlvm.core.storage.modules.has('testmod'))" "true"
+run_test "modules.get()" "const src = await hlvm.core.storage.modules.get('testmod'); console.log(src.includes('42'))" "true"
+run_test "modules.remove()" "await hlvm.core.storage.modules.remove('testmod'); console.log(await hlvm.core.storage.modules.has('testmod'))" "false"
 
 echo
 echo "════════════════════════════════════════════"
-echo "FILESYSTEM MODULE (15 functions)"
+echo "IO FILESYSTEM (15 functions)"
 echo "════════════════════════════════════════════"
 
 TMP="/tmp/hlvm-test-$$"
-run_test "fs.write()" "await hlvm.fs.write('$TMP.txt', 'hello'); console.log('written')" "written"
-run_test "fs.read()" "console.log(await hlvm.fs.read('$TMP.txt'))" "hello"
-run_test "fs.exists()" "console.log(await hlvm.fs.exists('$TMP.txt'))" "true"
-run_test "fs.writeBytes()" "await hlvm.fs.writeBytes('$TMP.bin', new Uint8Array([72,73])); console.log('written')" "written"
-run_test "fs.readBytes()" "const b = await hlvm.fs.readBytes('$TMP.bin'); console.log(b[0])" "72"
-run_test "fs.copy()" "await hlvm.fs.copy('$TMP.txt', '$TMP-copy.txt'); console.log(await hlvm.fs.exists('$TMP-copy.txt'))" "true"
-run_test "fs.move()" "await hlvm.fs.move('$TMP-copy.txt', '$TMP-moved.txt'); console.log(await hlvm.fs.exists('$TMP-moved.txt'))" "true"
-run_test "fs.mkdir()" "await hlvm.fs.mkdir('$TMP-dir'); console.log(await hlvm.fs.exists('$TMP-dir'))" "true"
-run_test "fs.readdir()" "const d = []; for await (const e of hlvm.fs.readdir('/tmp')) { d.push(e); break; } console.log(d.length > 0)" "true"
-run_test "fs.stat()" "const s = await hlvm.fs.stat('$TMP.txt'); console.log(s.isFile)" "true"
-run_test "fs.join()" "console.log(hlvm.fs.join('a', 'b', 'c'))" "a/b/c"
-run_test "fs.dirname()" "console.log(hlvm.fs.dirname('/a/b/c.txt'))" "/a/b"
-run_test "fs.basename()" "console.log(hlvm.fs.basename('/a/b/c.txt'))" "c.txt"
-run_test "fs.extname()" "console.log(hlvm.fs.extname('file.txt'))" ".txt"
-run_test "fs.remove()" "await hlvm.fs.remove('$TMP.txt'); console.log(await hlvm.fs.exists('$TMP.txt'))" "false"
+run_test "fs.write()" "await hlvm.core.io.fs.write('$TMP.txt', 'hello'); console.log('written')" "written"
+run_test "fs.read()" "console.log(await hlvm.core.io.fs.read('$TMP.txt'))" "hello"
+run_test "fs.exists()" "console.log(await hlvm.core.io.fs.exists('$TMP.txt'))" "true"
+run_test "fs.writeBytes()" "await hlvm.core.io.fs.writeBytes('$TMP.bin', new Uint8Array([72,73])); console.log('written')" "written"
+run_test "fs.readBytes()" "const b = await hlvm.core.io.fs.readBytes('$TMP.bin'); console.log(b[0])" "72"
+run_test "fs.copy()" "await hlvm.core.io.fs.copy('$TMP.txt', '$TMP-copy.txt'); console.log(await hlvm.core.io.fs.exists('$TMP-copy.txt'))" "true"
+run_test "fs.move()" "await hlvm.core.io.fs.move('$TMP-copy.txt', '$TMP-moved.txt'); console.log(await hlvm.core.io.fs.exists('$TMP-moved.txt'))" "true"
+run_test "fs.mkdir()" "await hlvm.core.io.fs.mkdir('$TMP-dir'); console.log(await hlvm.core.io.fs.exists('$TMP-dir'))" "true"
+run_test "fs.readdir()" "const d = []; for await (const e of hlvm.core.io.fs.readdir('/tmp')) { d.push(e); break; } console.log(d.length > 0)" "true"
+run_test "fs.stat()" "const s = await hlvm.core.io.fs.stat('$TMP.txt'); console.log(s.isFile)" "true"
+run_test "fs.join()" "console.log(hlvm.core.io.fs.join('a', 'b', 'c'))" "a/b/c"
+run_test "fs.dirname()" "console.log(hlvm.core.io.fs.dirname('/a/b/c.txt'))" "/a/b"
+run_test "fs.basename()" "console.log(hlvm.core.io.fs.basename('/a/b/c.txt'))" "c.txt"
+run_test "fs.extname()" "console.log(hlvm.core.io.fs.extname('file.txt'))" ".txt"
+run_test "fs.remove()" "await hlvm.core.io.fs.remove('$TMP.txt'); console.log(await hlvm.core.io.fs.exists('$TMP.txt'))" "false"
 
 # Cleanup
 rm -rf $TMP* 2>/dev/null
 
 echo
 echo "════════════════════════════════════════════"
-echo "COMPUTER.CLIPBOARD MODULE (3 functions)"
+echo "IO CLIPBOARD (3 functions)"
 echo "════════════════════════════════════════════"
 
-run_test "computer.clipboard.write()" "await hlvm.computer.clipboard.write('test-clip'); console.log('written')" "written"
-run_test "computer.clipboard.read()" "const c = await hlvm.computer.clipboard.read(); console.log(c.includes('test-clip'))" "true"
-run_test "computer.clipboard.isAvailable()" "console.log(await hlvm.computer.clipboard.isAvailable())" "true"
+run_test "clipboard.write()" "await hlvm.core.io.clipboard.write('test-clip'); console.log('written')" "written"
+run_test "clipboard.read()" "const c = await hlvm.core.io.clipboard.read(); console.log(c.includes('test-clip'))" "true"
+run_test "clipboard.isAvailable()" "console.log(await hlvm.core.io.clipboard.isAvailable())" "true"
 
 echo
 echo "════════════════════════════════════════════"
-echo "COMPUTER.CONTEXT MODULE (2 properties)"
+echo "COMPUTER CONTEXT (3 properties)"
 echo "════════════════════════════════════════════"
 
 # Test selection context - it should return null or string (can't test actual selection in CLI)
-run_test "computer.context.selection" "const sel = await hlvm.computer.context.selection; console.log(sel === null || typeof sel === 'string')" "true"
+run_test "context.selection" "const sel = await hlvm.core.computer.context.selection; console.log(sel === null || typeof sel === 'string')" "true"
 
 # Test screen context - REAL test: capture screen and verify it has actual data
-run_test "computer.context.screen.image real capture" "const img = hlvm.computer.context.screen.image; console.log(img.length > 1000)" "true"
+run_test "context.screen.image" "const img = hlvm.core.computer.context.screen.image; console.log(img.length > 1000)" "true"
 
 # Test screen context text returns string (OCR not implemented yet)
-run_test "computer.context.screen.text type" "const txt = hlvm.computer.context.screen.text; console.log(txt.includes('[Screen text extraction pending'))" "true"
+run_test "context.screen.text" "const txt = hlvm.core.computer.context.screen.text; console.log(txt.includes('[Screen text extraction pending'))" "true"
 
 echo
 echo "════════════════════════════════════════════"
-echo "UI.NOTIFICATION MODULE (4 functions)"
+echo "UI NOTIFICATION (4 functions)"
 echo "════════════════════════════════════════════"
 
-run_test "ui.notification.notify()" "await hlvm.ui.notification.notify('Test', 'HLVM'); console.log('notified')" "notified"
-run_test "ui.notification.alert (type)" "console.log(typeof hlvm.ui.notification.alert)" "function"
-run_test "ui.notification.confirm (type)" "console.log(typeof hlvm.ui.notification.confirm)" "function"
-run_test "ui.notification.prompt (type)" "console.log(typeof hlvm.ui.notification.prompt)" "function"
+run_test "notification.notify()" "await hlvm.core.ui.notification.notify('Test', 'HLVM'); console.log('notified')" "notified"
+run_test "notification.alert (type)" "console.log(typeof hlvm.core.ui.notification.alert)" "function"
+run_test "notification.confirm (type)" "console.log(typeof hlvm.core.ui.notification.confirm)" "function"
+run_test "notification.prompt (type)" "console.log(typeof hlvm.core.ui.notification.prompt)" "function"
 
 echo
 echo "════════════════════════════════════════════"
-echo "COMPUTER.SCREEN MODULE (2 functions)"
+echo "COMPUTER SCREEN (2 functions)"
 echo "════════════════════════════════════════════"
 
-run_test "computer.screen.capture()" "await hlvm.computer.screen.capture('/tmp/hlvm-screen.png'); console.log(await hlvm.fs.exists('/tmp/hlvm-screen.png'))" "true"
-run_test "computer.screen.getScreenSize()" "const sz = await hlvm.computer.screen.getScreenSize(); console.log(sz.width > 0)" "true"
+run_test "screen.capture()" "await hlvm.core.computer.screen.capture('/tmp/hlvm-screen.png'); console.log(await hlvm.core.io.fs.exists('/tmp/hlvm-screen.png'))" "true"
+run_test "screen.getScreenSize()" "const sz = await hlvm.core.computer.screen.getScreenSize(); console.log(sz.width > 0)" "true"
 rm -f /tmp/hlvm-screen.png
 
 echo
 echo "════════════════════════════════════════════"
-echo "COMPUTER.KEYBOARD MODULE (3 functions)"
+echo "COMPUTER KEYBOARD (3 functions)"
 echo "════════════════════════════════════════════"
 
-run_test "computer.keyboard.type (type)" "console.log(typeof hlvm.computer.keyboard.type)" "function"
-run_test "computer.keyboard.press (type)" "console.log(typeof hlvm.computer.keyboard.press)" "function"
-run_test "computer.keyboard.shortcut (type)" "console.log(typeof hlvm.computer.keyboard.shortcut)" "function"
-
-echo
-echo "════════════════════════════════════════════"
-echo "COMPUTER.MOUSE MODULE (5 functions)"
-echo "════════════════════════════════════════════"
-
-run_test "computer.mouse.move (type)" "console.log(typeof hlvm.computer.mouse.move)" "function"
-run_test "computer.mouse.click (type)" "console.log(typeof hlvm.computer.mouse.click)" "function"
-run_test "computer.mouse.position()" "const p = await hlvm.computer.mouse.position(); console.log(typeof p.x === 'number')" "true"
-run_test "computer.mouse.doubleClick (type)" "console.log(typeof hlvm.computer.mouse.doubleClick)" "function"
-run_test "computer.mouse.drag (type)" "console.log(typeof hlvm.computer.mouse.drag)" "function"
+run_test "keyboard.type (type)" "console.log(typeof hlvm.core.computer.keyboard.type)" "function"
+run_test "keyboard.press (type)" "console.log(typeof hlvm.core.computer.keyboard.press)" "function"
+run_test "keyboard.shortcut (type)" "console.log(typeof hlvm.core.computer.keyboard.shortcut)" "function"
 
 echo
 echo "════════════════════════════════════════════"
-echo "AI.OLLAMA MODULE (12 functions)"
+echo "COMPUTER MOUSE (5 functions)"
 echo "════════════════════════════════════════════"
 
-run_test "ai.ollama.generate (type)" "console.log(typeof hlvm.ai.ollama.generate)" "function"
-run_test "ai.ollama.chat (type)" "console.log(typeof hlvm.ai.ollama.chat)" "function"
-run_test "ai.ollama.list (type)" "console.log(typeof hlvm.ai.ollama.list)" "function"
-run_test "ai.ollama.show (type)" "console.log(typeof hlvm.ai.ollama.show)" "function"
-run_test "ai.ollama.pull (type)" "console.log(typeof hlvm.ai.ollama.pull)" "function"
-run_test "ai.ollama.push (type)" "console.log(typeof hlvm.ai.ollama.push)" "function"
-run_test "ai.ollama.create (type)" "console.log(typeof hlvm.ai.ollama.create)" "function"
-run_test "ai.ollama.copy (type)" "console.log(typeof hlvm.ai.ollama.copy)" "function"
-run_test "ai.ollama.deleteModel (type)" "console.log(typeof hlvm.ai.ollama.deleteModel)" "function"
-run_test "ai.ollama.embeddings (type)" "console.log(typeof hlvm.ai.ollama.embeddings)" "function"
-run_test "ai.ollama.ps (type)" "console.log(typeof hlvm.ai.ollama.ps)" "function"
-run_test "ai.ollama.isRunning()" "console.log(await hlvm.ai.ollama.isRunning())" "true\|false"
+run_test "mouse.move (type)" "console.log(typeof hlvm.core.computer.mouse.move)" "function"
+run_test "mouse.click (type)" "console.log(typeof hlvm.core.computer.mouse.click)" "function"
+run_test "mouse.position()" "const p = await hlvm.core.computer.mouse.position(); console.log(typeof p.x === 'number')" "true"
+run_test "mouse.doubleClick (type)" "console.log(typeof hlvm.core.computer.mouse.doubleClick)" "function"
+run_test "mouse.drag (type)" "console.log(typeof hlvm.core.computer.mouse.drag)" "function"
+
+echo
+echo "════════════════════════════════════════════"
+echo "AI OLLAMA (12 functions)"
+echo "════════════════════════════════════════════"
+
+run_test "ollama.generate (type)" "console.log(typeof hlvm.core.ai.ollama.generate)" "function"
+run_test "ollama.chat (type)" "console.log(typeof hlvm.core.ai.ollama.chat)" "function"
+run_test "ollama.list (type)" "console.log(typeof hlvm.core.ai.ollama.list)" "function"
+run_test "ollama.show (type)" "console.log(typeof hlvm.core.ai.ollama.show)" "function"
+run_test "ollama.pull (type)" "console.log(typeof hlvm.core.ai.ollama.pull)" "function"
+run_test "ollama.push (type)" "console.log(typeof hlvm.core.ai.ollama.push)" "function"
+run_test "ollama.create (type)" "console.log(typeof hlvm.core.ai.ollama.create)" "function"
+run_test "ollama.copy (type)" "console.log(typeof hlvm.core.ai.ollama.copy)" "function"
+run_test "ollama.deleteModel (type)" "console.log(typeof hlvm.core.ai.ollama.deleteModel)" "function"
+run_test "ollama.embeddings (type)" "console.log(typeof hlvm.core.ai.ollama.embeddings)" "function"
+run_test "ollama.ps (type)" "console.log(typeof hlvm.core.ai.ollama.ps)" "function"
+run_test "ollama.isRunning()" "console.log(await hlvm.core.ai.ollama.isRunning())" "true\|false"
 
 # Test actual functionality with real model
 # Get first available model or use default
-MODEL_TEST='const m = (await hlvm.ai.ollama.list()).models[0]?.name || "qwen3:0.6b"'
+MODEL_TEST='const m = (await hlvm.core.ai.ollama.list()).models[0]?.name || "qwen3:0.6b"'
 
-run_test "ai.ollama.isRunning check" "console.log(await hlvm.ai.ollama.isRunning())" "true\|false"
+run_test "ollama.isRunning check" "console.log(await hlvm.core.ai.ollama.isRunning())" "true\|false"
 
-run_test "ai.ollama.list() returns models" "const r = await hlvm.ai.ollama.list(); console.log(Array.isArray(r.models))" "true"
+run_test "ollama.list() returns models" "const r = await hlvm.core.ai.ollama.list(); console.log(Array.isArray(r.models))" "true"
 
-run_test "ai.ollama.ps() returns models" "const r = await hlvm.ai.ollama.ps(); console.log(Array.isArray(r.models))" "true"
+run_test "ollama.ps() returns models" "const r = await hlvm.core.ai.ollama.ps(); console.log(Array.isArray(r.models))" "true"
 
 # Use actual available model for tests
-run_test "ai.ollama.generate() completion" "${MODEL_TEST}; const r = await hlvm.ai.ollama.generate({ model: m, prompt: 'OK', stream: false }); console.log(typeof r.response)" "string"
+run_test "ollama.generate() completion" "${MODEL_TEST}; const r = await hlvm.core.ai.ollama.generate({ model: m, prompt: 'OK', stream: false }); console.log(typeof r.response)" "string"
 
-run_test "ai.ollama.generate() streaming" "${MODEL_TEST}; const s = await hlvm.ai.ollama.generate({ model: m, prompt: 'Hi', stream: true }); console.log(typeof s.next)" "function"
+run_test "ollama.generate() streaming" "${MODEL_TEST}; const s = await hlvm.core.ai.ollama.generate({ model: m, prompt: 'Hi', stream: true }); console.log(typeof s.next)" "function"
 
-run_test "ai.ollama.chat() completion" "${MODEL_TEST}; const r = await hlvm.ai.ollama.chat({ model: m, messages: [{role: 'user', content: 'Hi'}], stream: false }); console.log(r.message ? true : false)" "true"
+run_test "ollama.chat() completion" "${MODEL_TEST}; const r = await hlvm.core.ai.ollama.chat({ model: m, messages: [{role: 'user', content: 'Hi'}], stream: false }); console.log(r.message ? true : false)" "true"
 
-run_test "ai.ollama.chat() streaming" "${MODEL_TEST}; const s = await hlvm.ai.ollama.chat({ model: m, messages: [{role: 'user', content: 'Hi'}], stream: true }); console.log(typeof s.next)" "function"
+run_test "ollama.chat() streaming" "${MODEL_TEST}; const s = await hlvm.core.ai.ollama.chat({ model: m, messages: [{role: 'user', content: 'Hi'}], stream: true }); console.log(typeof s.next)" "function"
 
-run_test "ai.ollama.show() model info" "${MODEL_TEST}; const r = await hlvm.ai.ollama.show({ name: m }); console.log(r.license || r.modelfile || r.parameters ? true : false)" "true"
+run_test "ollama.show() model info" "${MODEL_TEST}; const r = await hlvm.core.ai.ollama.show({ name: m }); console.log(r.license || r.modelfile || r.parameters ? true : false)" "true"
 
-run_test "streaming yields chunks" "${MODEL_TEST}; const s = await hlvm.ai.ollama.generate({ model: m, prompt: 'Hi', stream: true }); let c = 0; for await (const chunk of s) { c++; if (c > 2) break; } console.log(c > 0)" "true"
+run_test "streaming yields chunks" "${MODEL_TEST}; const s = await hlvm.core.ai.ollama.generate({ model: m, prompt: 'Hi', stream: true }); let c = 0; for await (const chunk of s) { c++; if (c > 2) break; } console.log(c > 0)" "true"
 
-run_test "error handling" "try { await hlvm.ai.ollama.generate({ model: 'fake-xyz', prompt: 'test', stream: false }); console.log(false); } catch(e) { console.log(e.message.includes('not found')); }" "true"
+run_test "error handling" "try { await hlvm.core.ai.ollama.generate({ model: 'fake-xyz', prompt: 'test', stream: false }); console.log(false); } catch(e) { console.log(e.message.includes('not found')); }" "true"
 
 echo
 echo "════════════════════════════════════════════"
-echo "APP CONTROL MODULE (1 object)"
+echo "APP CONTROL (4 objects)"
 echo "════════════════════════════════════════════"
 
 run_test "app object exists" "console.log(typeof hlvm.app)" "object"
@@ -225,6 +219,7 @@ run_test "app.spotlight exists" "console.log(typeof hlvm.app.spotlight)" "object
 run_test "app.chat exists" "console.log(typeof hlvm.app.chat)" "object"
 
 echo
+echo "════════════════════════════════════════════"
 echo "CUSTOM PROPERTY PERSISTENCE (5 tests)"
 echo "════════════════════════════════════════════"
 
@@ -234,6 +229,12 @@ run_test "custom property update" "hlvm.mytest = {data: 'updated'}; console.log(
 run_test "custom property null removal" "hlvm.mytest = null; console.log(typeof hlvm.mytest)" "undefined"
 run_test "custom property delete" "hlvm.temp = 'test'; delete hlvm.temp; console.log(typeof hlvm.temp)" "undefined"
 
+echo
+echo "════════════════════════════════════════════"
+echo "CONTEXT SHORTHAND (1 test)"
+echo "════════════════════════════════════════════"
+
+run_test "global context" "console.log(typeof context)" "object"
 
 echo
 echo "╔════════════════════════════════════════════╗"

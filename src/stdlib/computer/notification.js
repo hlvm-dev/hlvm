@@ -3,41 +3,160 @@
 import * as platform from "../core/platform.js";
 import { escapeShell, decode, powershell, PS, ERRORS } from "../core/platform.js";
 
-export async function alert(message, title = "Alert") {
-  const escapedMessage = escapeShell(message);
-  const escapedTitle = escapeShell(title);
-  
-  if (platform.isDarwin) {
-    // macOS: osascript (built-in)
-    const script = `display alert "${escapedTitle}" message "${escapedMessage}"`;
-    await new Deno.Command("osascript", { args: ["-e", script] }).output();
-    
-  } else if (platform.isWindows) {
-    // Windows: PowerShell MessageBox (built-in)
-    const script = `
-      ${PS.forms}
-      [System.Windows.Forms.MessageBox]::Show("${escapedMessage}", "${escapedTitle}")
-    `;
-    await powershell(script);
-    
-  } else {
-    // Linux: Try multiple tools
-    try {
-      // Try zenity first (most common)
-      await new Deno.Command("zenity", {
-        args: ["--info", "--text", message, "--title", title]
-      }).output();
-    } catch {
-      try {
-        // Fallback to kdialog (KDE)
-        await new Deno.Command("kdialog", {
-          args: ["--msgbox", message, "--title", title]
-        }).output();
-      } catch {
-        // Last resort: notify-send (notification, not dialog)
-        await notify(message, title);
+// DRY: Generic Linux dialog handler
+async function linuxDialog(type, message, title, defaultValue = "") {
+  const tools = [
+    {
+      cmd: "zenity",
+      args: {
+        alert: ["--info", "--text", message, "--title", title],
+        confirm: ["--question", "--text", message, "--title", title],
+        prompt: ["--entry", "--text", message, "--title", title, ...(defaultValue ? ["--entry-text", defaultValue] : [])]
+      }
+    },
+    {
+      cmd: "kdialog",
+      args: {
+        alert: ["--msgbox", message, "--title", title],
+        confirm: ["--yesno", message, "--title", title],
+        prompt: ["--inputbox", message, defaultValue, "--title", title]
       }
     }
+  ];
+  
+  for (const tool of tools) {
+    try {
+      const result = await new Deno.Command(tool.cmd, {
+        args: tool.args[type]
+      }).output();
+      
+      if (type === "alert") return;
+      if (type === "confirm") return result.code === 0;
+      if (type === "prompt") return result.code === 0 ? decode(result.stdout).trim() : null;
+    } catch {
+      // Try next tool
+    }
+  }
+  
+  // Fallback
+  if (type === "alert") {
+    await notify(message, title);
+  } else {
+    console.error(ERRORS.LINUX_DIALOG);
+    return type === "confirm" ? false : null;
+  }
+}
+
+// DRY: Generic osascript handler
+async function osascriptDialog(type, message, title, defaultValue = "") {
+  const escapedMessage = escapeShell(message);
+  const escapedTitle = escapeShell(title);
+  const escapedDefault = escapeShell(defaultValue);
+  
+  const scripts = {
+    alert: `display alert "${escapedTitle}" message "${escapedMessage}"`,
+    confirm: `
+      button returned of (display dialog "${escapedMessage}" ¬
+        with title "${escapedTitle}" ¬
+        buttons {"Cancel", "OK"} ¬
+        default button "OK")
+    `,
+    prompt: `
+      text returned of (display dialog "${escapedMessage}" ¬
+        with title "${escapedTitle}" ¬
+        default answer "${escapedDefault}" ¬
+        buttons {"Cancel", "OK"} ¬
+        default button "OK")
+    `
+  };
+  
+  try {
+    const result = await new Deno.Command("osascript", { 
+      args: ["-e", scripts[type]] 
+    }).output();
+    
+    if (type === "alert") return;
+    if (type === "confirm") return decode(result.stdout).trim() === "OK";
+    if (type === "prompt") return decode(result.stdout).trim();
+  } catch {
+    return type === "confirm" ? false : null;
+  }
+}
+
+// DRY: Generic PowerShell dialog handler
+async function windowsDialog(type, message, title, defaultValue = "") {
+  const escapedMessage = escapeShell(message);
+  const escapedTitle = escapeShell(title);
+  const escapedDefault = escapeShell(defaultValue);
+  
+  const scripts = {
+    alert: `
+      ${PS.forms}
+      [System.Windows.Forms.MessageBox]::Show("${escapedMessage}", "${escapedTitle}")
+    `,
+    confirm: `
+      ${PS.forms}
+      $result = [System.Windows.Forms.MessageBox]::Show(
+        "${escapedMessage}", 
+        "${escapedTitle}", 
+        [System.Windows.Forms.MessageBoxButtons]::YesNo
+      )
+      if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+        Write-Host "true"
+      } else {
+        Write-Host "false"
+      }
+    `,
+    prompt: `
+      ${PS.visualBasic}
+      $result = [Microsoft.VisualBasic.Interaction]::InputBox(
+        "${escapedMessage}", 
+        "${escapedTitle}", 
+        "${escapedDefault}"
+      )
+      if ($result -eq "") {
+        if ($LastExitCode -eq 0) { Write-Host "" }
+      } else {
+        Write-Host $result
+      }
+    `
+  };
+  
+  const { stdout } = await powershell(scripts[type]);
+  
+  if (type === "alert") return;
+  if (type === "confirm") return decode(stdout).trim() === "true";
+  if (type === "prompt") return decode(stdout).trim();
+}
+
+// Public API - Now much cleaner
+export async function alert(message, title = "Alert") {
+  if (platform.isDarwin) {
+    return osascriptDialog("alert", message, title);
+  } else if (platform.isWindows) {
+    return windowsDialog("alert", message, title);
+  } else {
+    return linuxDialog("alert", message, title);
+  }
+}
+
+export async function confirm(message, title = "Confirm") {
+  if (platform.isDarwin) {
+    return osascriptDialog("confirm", message, title);
+  } else if (platform.isWindows) {
+    return windowsDialog("confirm", message, title);
+  } else {
+    return linuxDialog("confirm", message, title);
+  }
+}
+
+export async function prompt(message, defaultValue = "", title = "Input") {
+  if (platform.isDarwin) {
+    return osascriptDialog("prompt", message, title, defaultValue);
+  } else if (platform.isWindows) {
+    return windowsDialog("prompt", message, title, defaultValue);
+  } else {
+    return linuxDialog("prompt", message, title, defaultValue);
   }
 }
 
@@ -46,7 +165,6 @@ export async function notify(message, title = "Notification", subtitle = "") {
   const escapedTitle = escapeShell(title);
   
   if (platform.isDarwin) {
-    // macOS: osascript notification (built-in)
     let script = `display notification "${escapedMessage}" with title "${escapedTitle}"`;
     if (subtitle) {
       script += ` subtitle "${escapeShell(subtitle)}"`;
@@ -54,9 +172,8 @@ export async function notify(message, title = "Notification", subtitle = "") {
     await new Deno.Command("osascript", { args: ["-e", script] }).output();
     
   } else if (platform.isWindows) {
-    // Windows: PowerShell BurntToast or fallback to balloon tip
+    // Windows toast notification
     try {
-      // Try Windows 10+ toast notification
       const script = `
         [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
         [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
@@ -78,145 +195,17 @@ export async function notify(message, title = "Notification", subtitle = "") {
       `;
       await powershell(script);
     } catch {
-      // Fallback to simple alert
       await alert(message, title);
     }
     
   } else {
-    // Linux: notify-send (most universal)
+    // Linux notify-send
     try {
       await new Deno.Command("notify-send", {
         args: [title, message]
       }).output();
     } catch {
       console.error(ERRORS.LINUX_NOTIFY);
-    }
-  }
-}
-
-export async function confirm(message, title = "Confirm") {
-  const escapedMessage = escapeShell(message);
-  const escapedTitle = escapeShell(title);
-  
-  if (platform.isDarwin) {
-    // macOS: osascript dialog (built-in)
-    const script = `
-      button returned of (display dialog "${escapedMessage}" ¬
-        with title "${escapedTitle}" ¬
-        buttons {"Cancel", "OK"} ¬
-        default button "OK")
-    `;
-    try {
-      const { stdout } = await new Deno.Command("osascript", { 
-        args: ["-e", script] 
-      }).output();
-      return decode(stdout).trim() === "OK";
-    } catch {
-      return false; // User cancelled
-    }
-    
-  } else if (platform.isWindows) {
-    // Windows: PowerShell YesNo MessageBox (built-in)
-    const script = `
-      ${PS.forms}
-      $result = [System.Windows.Forms.MessageBox]::Show(
-        "${escapedMessage}", 
-        "${escapedTitle}", 
-        [System.Windows.Forms.MessageBoxButtons]::YesNo
-      )
-      if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
-        Write-Host "true"
-      } else {
-        Write-Host "false"
-      }
-    `;
-    const { stdout } = await powershell(script);
-    return decode(stdout).trim() === "true";
-    
-  } else {
-    // Linux: Try zenity or kdialog
-    try {
-      const { code } = await new Deno.Command("zenity", {
-        args: ["--question", "--text", message, "--title", title]
-      }).output();
-      return code === 0;
-    } catch {
-      try {
-        const { code } = await new Deno.Command("kdialog", {
-          args: ["--yesno", message, "--title", title]
-        }).output();
-        return code === 0;
-      } catch {
-        console.error(ERRORS.LINUX_DIALOG);
-        return false;
-      }
-    }
-  }
-}
-
-export async function prompt(message, defaultValue = "", title = "Input") {
-  const escapedMessage = escapeShell(message);
-  const escapedTitle = escapeShell(title);
-  const escapedDefault = escapeShell(defaultValue);
-  
-  if (platform.isDarwin) {
-    // macOS: osascript input dialog (built-in)
-    const script = `
-      text returned of (display dialog "${escapedMessage}" ¬
-        with title "${escapedTitle}" ¬
-        default answer "${escapedDefault}" ¬
-        buttons {"Cancel", "OK"} ¬
-        default button "OK")
-    `;
-    try {
-      const { stdout } = await new Deno.Command("osascript", { 
-        args: ["-e", script] 
-      }).output();
-      return decode(stdout).trim();
-    } catch {
-      return null; // User cancelled
-    }
-    
-  } else if (platform.isWindows) {
-    // Windows: PowerShell InputBox (built-in)
-    const script = `
-      ${PS.visualBasic}
-      $result = [Microsoft.VisualBasic.Interaction]::InputBox(
-        "${escapedMessage}", 
-        "${escapedTitle}", 
-        "${escapedDefault}"
-      )
-      if ($result -eq "") {
-        # Could be cancelled or empty input
-        if ($LastExitCode -eq 0) {
-          Write-Host ""
-        }
-      } else {
-        Write-Host $result
-      }
-    `;
-    const { stdout } = await powershell(script);
-    return decode(stdout).trim();
-    
-  } else {
-    // Linux: Try zenity or kdialog
-    try {
-      const args = ["zenity", "--entry", "--text", message, "--title", title];
-      if (defaultValue) args.push("--entry-text", defaultValue);
-      const { stdout, code } = await new Deno.Command(args[0], {
-        args: args.slice(1)
-      }).output();
-      return code === 0 ? decode(stdout).trim() : null;
-    } catch {
-      try {
-        const { stdout, code } = await new Deno.Command("kdialog", {
-          args: ["--inputbox", message, defaultValue, "--title", title]
-        }).output();
-        return code === 0 ? decode(stdout).trim() : null;
-      } catch {
-        console.error(ERRORS.LINUX_DIALOG);
-        return null;
-      }
     }
   }
 }

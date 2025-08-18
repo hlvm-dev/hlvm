@@ -1,7 +1,7 @@
 # HLVM Build System - Single command deployment
 
-# Default: build and deploy
-all: deploy
+# Default: build, deploy and run
+all: deploy run
 
 # Generate embedded stdlib and compile binary
 build:
@@ -42,4 +42,8 @@ test:
 	@echo "Testing deployed binary..."
 	@echo "hlvm.platform.os" | /Users/seoksoonjang/dev/HLVM/HLVM/Resources/hlvm 2>/dev/null | tail -1
 
-.PHONY: all build deploy clean test
+# Run HLVM REPL
+run:
+	@./hlvm
+
+.PHONY: all build deploy clean test run

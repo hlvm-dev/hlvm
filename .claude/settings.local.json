@@ -109,7 +109,15 @@
       "Bash(for:*)",
       "Bash(do)",
       "Bash(done)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(/tmp/test-tab-completion.js)",
+      "Bash(./src/build-tab-completion.ts)",
+      "Bash(/tmp/debug-tab.sh)",
+      "Bash(/dev/null)",
+      "Bash(/Users/seoksoonjang/Desktop/hlvm/src/embed-stdlib.ts)",
+      "Bash(./test/test-cli.sh:*)",
+      "Bash(./resources/deno --version)",
+      "Bash(./resources/deno repl --quiet --eval-file=/tmp/simple-proxy-test.js)"
     ],
     "deny": [],
     "ask": [],

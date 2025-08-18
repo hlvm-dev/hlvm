@@ -15,85 +15,169 @@ import * as ollama from "./stdlib/ai/ollama.js";
 import ui from "./stdlib/ui/control.js";
 import { context as computerContext } from "./stdlib/computer/context.js";
 
-// Create hlvm namespace
-const hlvmBase = {
-  // Module management - generic for all UIs
-  modules: {
-    save: db.save,
-    remove: async (name) => {
-      // If no name given, remove ALL modules (nuke)
-      if (!name) {
-        const allModules = db.list();
-        for (const mod of allModules) {
-          await db.remove(mod.key);
+// Create hlvm namespace inside IIFE to hide from global scope
+globalThis.hlvm = (() => {
+  const hlvmBase = {
+    // LAYER 1: Core primitives - all building blocks
+    core: {
+      // System - OS/environment stuff (merge platform + system)
+      system: {
+        // Info & platform
+        os: platform.os,
+        arch: platform.arch,
+        version: platform.version,
+        hostname: system.hostname,
+        pid: system.pid,
+        isDarwin: platform.isDarwin,
+        isWindows: platform.isWindows,
+        isLinux: platform.isLinux,
+        
+        // Working directory & paths
+        homeDir: platform.homeDir,
+        tempDir: platform.tempDir,
+        cwd: system.cwd,
+        chdir: system.chdir,
+        pathSep: platform.pathSep,
+        exeExt: platform.exeExt,
+        
+        // Environment & execution
+        env: system.env,
+        exit: system.exit,
+        exec: system.exec,
+        shell: platform.shell,
+        powershell: platform.powershell,
+        
+        // Utilities
+        escapeShell: platform.escapeShell,
+        escapeKeyboard: platform.escapeKeyboard,
+        decode: platform.decode,
+        linuxTool: platform.linuxTool,
+        
+        // Constants
+        PS: platform.PS,
+        ERRORS: platform.ERRORS
+      },
+      
+      // Storage - persistence
+      storage: {
+        db: Object.assign(db.db, {
+          path: db.path,
+          load: db.load,
+          getSource: db.getSource
+        }),
+        modules: {
+          save: db.save,
+          remove: async (name) => {
+            // If no name given, remove ALL modules (nuke)
+            if (!name) {
+              const allModules = db.list();
+              for (const mod of allModules) {
+                await db.remove(mod.key);
+              }
+              console.log(`Removed all ${allModules.length} modules`);
+              return true;
+            }
+            // Otherwise remove specific module
+            return db.remove(name);
+          },
+          list: db.list,
+          load: db.load,
+          get: db.getSource,
+          has: async (name) => {
+            const modules = db.list();
+            return modules.some(m => m.key === name);
+          },
+          
+          // Shortcut management - permanent global shortcuts
+          shortcut: async (name, path) => {
+            // Remove shortcut if path is null
+            if (path === null || path === undefined) {
+              return removeShortcut(name);
+            }
+            return createShortcut(name, path);
+          },
+          shortcuts: () => listShortcuts(),
+          removeShortcut: (name) => removeShortcut(name),
+          updateShortcut: (name, path) => createShortcut(name, path)
         }
-        console.log(`Removed all ${allModules.length} modules`);
-        return true;
+      },
+      
+      // IO - input/output
+      io: {
+        fs: {
+          read: fs.read,
+          write: fs.write,
+          readBytes: fs.readBytes,
+          writeBytes: fs.writeBytes,
+          exists: fs.exists,
+          stat: fs.stat,
+          remove: fs.remove,
+          copy: fs.copy,
+          move: fs.move,
+          mkdir: fs.mkdir,
+          readdir: fs.readdir,
+          // Path utilities stay here (fs context)
+          join: fs.join,
+          dirname: fs.dirname,
+          basename: fs.basename,
+          extname: fs.extname
+        },
+        clipboard: {
+          isAvailable: clipboard.isAvailable,
+          read: clipboard.read,
+          write: clipboard.write
+        }
+      },
+      
+      // Computer - automation
+      computer: {
+        keyboard: {
+          type: keyboard.type,
+          press: keyboard.press,
+          shortcut: keyboard.shortcut
+        },
+        mouse: {
+          move: mouse.move,
+          click: mouse.click,
+          doubleClick: mouse.doubleClick,
+          drag: mouse.drag,
+          position: mouse.position
+        },
+        screen: {
+          capture: screen.capture,
+          getScreenSize: screen.getScreenSize
+        },
+        context: computerContext
+      },
+      
+      // UI - user interface
+      ui: {
+        notification: {
+          alert: notification.alert,
+          confirm: notification.confirm,
+          notify: notification.notify,
+          prompt: notification.prompt
+        }
+      },
+      
+      // AI - AI services
+      ai: {
+        ollama: ollama
       }
-      // Otherwise remove specific module
-      return db.remove(name);
-    },
-    list: db.list,
-    load: db.load,
-    get: db.getSource,
-    has: async (name) => {
-      const modules = db.list();
-      return modules.some(m => m.key === name);
     },
     
-    // Shortcut management - permanent global shortcuts
-    shortcut: async (name, path) => {
-      // Remove shortcut if path is null
-      if (path === null || path === undefined) {
-        return removeShortcut(name);
-      }
-      return createShortcut(name, path);
+    // LAYER 2: App control (top-level, not core!)
+    app: ui,
+    
+    // LAYER 3: High-level stdlib (empty for now, will add high-level functions later)
+    stdlib: {
+      // Future: ask(), fix(), translate(), summarize(), etc.
     },
-    shortcuts: () => listShortcuts(),
-    removeShortcut: (name) => removeShortcut(name),
-    updateShortcut: (name, path) => createShortcut(name, path)
-  },
-  
-  // Database access (for advanced users)
-  db: Object.assign(db.db, {
-    path: db.path,
-    load: db.load,
-    getSource: db.getSource
-  }),
-  
-  // System modules
-  platform,
-  system,
-  fs,
-  clipboard,
-  
-  // Computer control - grouped for context access
-  computer: {
-    notification,
-    screen,
-    keyboard,
-    mouse,
-    clipboard,
-    context: computerContext
-  },
-  
-  // UI namespace
-  ui: {
-    notification
-  },
-  
-  // AI namespace
-  ai: {
-    ollama
-  },
-  
-  // App control (GUI when available)
-  app: ui,
-  
-  // Context - returns context object
-  get context() {
-    return computerContext;
-  },
+    
+    // Context - returns context object (keep at root for convenience)
+    get context() {
+      return hlvmBase.core.computer.context;
+    },
   
   // Help
   help: () => {
@@ -101,78 +185,92 @@ const hlvmBase = {
 HLVM - High-Level Virtual Machine
 ==================================
 
-Core Functions:
-  hlvm.modules.save()       - Save module
-  hlvm.modules.remove()     - Remove module(s)
-  hlvm.modules.list()       - List modules
-  hlvm.modules.load()       - Load module
-  hlvm.modules.shortcut()   - Create global shortcut
-  hlvm.modules.shortcuts()  - List all shortcuts
-  hlvm.context              - System context (selection, screen)
+STRUCTURE:
+  hlvm.core.*               - Core primitives (building blocks)
+  hlvm.app.*                - App control (GUI functions)
+  hlvm.stdlib.*             - High-level functions (coming soon)
 
-System Control:
-  hlvm.platform             - Platform info (os, arch, etc)
-  hlvm.system               - System utilities
-  hlvm.fs                   - File system operations
+CORE MODULES:
+  hlvm.core.system          - OS/environment (exec, env, paths)
+  hlvm.core.storage         - Persistence (db, modules)
+  hlvm.core.io              - Input/Output (fs, clipboard)
+  hlvm.core.computer        - Automation (keyboard, mouse, screen)
+  hlvm.core.ui              - User interface (notifications)
+  hlvm.core.ai              - AI services (ollama)
 
-Computer Control:
-  hlvm.computer.notification - UI dialogs (alert, notify, confirm, prompt)
-  hlvm.computer.screen      - Screen capture
-  hlvm.computer.keyboard    - Keyboard automation (type, press)
-  hlvm.computer.mouse       - Mouse automation (move, click, position)
-  hlvm.computer.clipboard   - Clipboard operations
+STORAGE & MODULES:
+  hlvm.core.storage.modules.save()    - Save module
+  hlvm.core.storage.modules.remove()  - Remove module(s)
+  hlvm.core.storage.modules.list()    - List modules
+  hlvm.core.storage.modules.load()    - Load module
 
-AI Services:
-  hlvm.ai.ollama.list()     - List available models
-  hlvm.ai.ollama.chat()     - Chat with AI model
+FILE OPERATIONS:
+  hlvm.core.io.fs.read(path)          - Read text file
+  hlvm.core.io.fs.write(path, text)   - Write text file
+  hlvm.core.io.fs.exists(path)        - Check if path exists
+  hlvm.core.io.fs.remove(path)        - Delete file/directory
+  hlvm.core.io.fs.mkdir(path)         - Create directory
+  hlvm.core.io.fs.copy(src, dest)     - Copy file/directory
+  hlvm.core.io.fs.move(src, dest)     - Move file/directory
 
-File Operations:
-  hlvm.fs.read(path)        - Read text file
-  hlvm.fs.write(path, text) - Write text file
-  hlvm.fs.readBytes(path)   - Read binary file
-  hlvm.fs.writeBytes(path)  - Write binary file
-  hlvm.fs.exists(path)      - Check if path exists
-  hlvm.fs.remove(path)      - Delete file/directory
-  hlvm.fs.mkdir(path)       - Create directory
-  hlvm.fs.copy(src, dest)   - Copy file/directory
-  hlvm.fs.move(src, dest)   - Move file/directory
+COMPUTER AUTOMATION:
+  hlvm.core.computer.keyboard.type()  - Type text
+  hlvm.core.computer.keyboard.press() - Press keys
+  hlvm.core.computer.mouse.click()    - Click mouse
+  hlvm.core.computer.mouse.move()     - Move mouse
+  hlvm.core.computer.screen.capture() - Capture screen
+
+AI SERVICES:
+  hlvm.core.ai.ollama.list()          - List models
+  hlvm.core.ai.ollama.chat()          - Chat with AI
+
+APP CONTROL:
+  hlvm.app.spotlight                  - Spotlight UI
+  hlvm.app.chat                       - Chat UI
+  hlvm.app.playground                 - Code playground
 
 Examples:
   // Files
-  await hlvm.fs.write('/tmp/test.txt', 'Hello')
-  const text = await hlvm.fs.read('/tmp/test.txt')
+  await hlvm.core.io.fs.write('/tmp/test.txt', 'Hello')
+  const text = await hlvm.core.io.fs.read('/tmp/test.txt')
   
   // Notifications
-  await hlvm.computer.notification.notify("Done!", "HLVM")
-  const name = await hlvm.computer.notification.prompt("Name?")
+  await hlvm.core.ui.notification.notify("Done!", "HLVM")
+  const name = await hlvm.core.ui.notification.prompt("Name?")
   
   // Automation
-  await hlvm.computer.screen.capture("/tmp/screen.png")
-  await hlvm.computer.keyboard.type("Hello")
-  await hlvm.computer.mouse.click(100, 100)
+  await hlvm.core.computer.screen.capture("/tmp/screen.png")
+  await hlvm.core.computer.keyboard.type("Hello")
+  await hlvm.core.computer.mouse.click(100, 100)
+  
+  // AI
+  const response = await hlvm.core.ai.ollama.chat({ 
+    model: 'llama3', 
+    prompt: 'Hello' 
+  })
     `);
   },
   
   // Status
   status: () => {
     const modules = Object.keys(hlvm).filter(k => typeof hlvm[k] === 'object');
-    const savedModules = hlvm.modules.list();
+    const savedModules = hlvmBase.core.storage.modules.list();
     
     console.log('\nHLVM Status:');
     console.log('─'.repeat(40));
-    console.log('System Modules:', modules.join(', '));
+    console.log('Top-level:', modules.join(', '));
     console.log(`Saved Modules: ${savedModules.length} modules`);
-    console.log(`Database: ${db.path}`);
-    console.log(`Platform: ${platform.os} (${platform.arch})`);
-    console.log(`Temp Dir: ${platform.tempDir()}`);
-    console.log(`Home Dir: ${platform.homeDir()}`);
+    console.log(`Database: ${hlvmBase.core.storage.db.path}`);
+    console.log(`Platform: ${hlvmBase.core.system.os} (${hlvmBase.core.system.arch})`);
+    console.log(`Temp Dir: ${hlvmBase.core.system.tempDir()}`);
+    console.log(`Home Dir: ${hlvmBase.core.system.homeDir()}`);
   }
-};
+  };
 
-// Setup shortcut persistence
-function setupShortcuts() {
-  // Create shortcuts table if not exists
-  db.db.exec(`
+  // Setup shortcut persistence
+  function setupShortcuts() {
+    // Create shortcuts table if not exists
+    db.db.exec(`
     CREATE TABLE IF NOT EXISTS shortcuts (
       name TEXT PRIMARY KEY,
       path TEXT NOT NULL,
@@ -209,8 +307,8 @@ function setupShortcuts() {
   });
 }
 
-// Create a shortcut
-function createShortcut(name, path) {
+  // Create a shortcut
+  function createShortcut(name, path) {
   // Validate name doesn't conflict with system
   const reserved = ['hlvm', 'Deno', 'console', 'global', 'globalThis', 'window', 
                     'document', 'alert', 'confirm', 'prompt', 'eval', 'Function',
@@ -249,8 +347,8 @@ function createShortcut(name, path) {
   return true;
 }
 
-// Remove a shortcut
-function removeShortcut(name) {
+  // Remove a shortcut
+  function removeShortcut(name) {
   // Remove from database
   db.db.prepare('DELETE FROM shortcuts WHERE name = ?').run(name);
   
@@ -261,8 +359,8 @@ function removeShortcut(name) {
   return true;
 }
 
-// List all shortcuts
-function listShortcuts() {
+  // List all shortcuts
+  function listShortcuts() {
   const shortcuts = db.db.prepare('SELECT * FROM shortcuts ORDER BY name').all();
   return shortcuts.map(s => ({
     name: s.name,
@@ -272,8 +370,8 @@ function listShortcuts() {
   }));
 }
 
-// Setup custom property persistence
-function setupCustomPropertyPersistence() {
+  // Setup custom property persistence
+  function setupCustomPropertyPersistence() {
   // Create custom_properties table if not exists
   db.db.exec(`
     CREATE TABLE IF NOT EXISTS custom_properties (
@@ -300,8 +398,8 @@ function setupCustomPropertyPersistence() {
   });
 }
 
-// Save custom property to database
-function saveCustomProperty(key, value) {
+  // Save custom property to database
+  function saveCustomProperty(key, value) {
   let serialized;
   let type = typeof value;
   
@@ -323,46 +421,53 @@ function saveCustomProperty(key, value) {
   `).run(key, serialized, type, Date.now());
 }
 
-// Setup persistence
-setupShortcuts();
-setupCustomPropertyPersistence();
+  // Setup persistence
+  setupShortcuts();
+  setupCustomPropertyPersistence();
 
-// Create proxy for custom properties
-globalThis.hlvm = new Proxy(hlvmBase, {
-  set(target, prop, value) {
-    // List of system properties that cannot be overridden
-    const systemProps = ['modules', 'db', 'platform', 'system', 'fs', 'clipboard', 'notification', 
-                        'screen', 'keyboard', 'mouse', 'ui', 'ai', 'app', 'computer', 'context', 
-                        'help', 'status'];
-    
-    if (systemProps.includes(prop)) {
-      console.error(`Cannot override system property: hlvm.${prop}`);
-      return false;
-    }
-    
-    // Save to database for persistence
-    saveCustomProperty(prop, value);
-    
-    // Set the value
-    if (value === null || value === undefined) {
-      delete target[prop];
-    } else {
-      target[prop] = value;
-    }
-    return true;
-  },
+  // Add custom property setter directly to the object
+  // This preserves TAB completion while allowing custom properties
+  Object.defineProperty(hlvmBase, '__set', {
+    value: function(prop, value) {
+      const systemProps = ['core', 'app', 'stdlib', 'context', 'help', 'status', '__set', '__delete'];
+      
+      if (systemProps.includes(prop)) {
+        console.error(`Cannot override system property: hlvm.${prop}`);
+        return false;
+      }
+      
+      // Save to database for persistence
+      saveCustomProperty(prop, value);
+      
+      // Set the value
+      if (value === null || value === undefined) {
+        delete this[prop];
+      } else {
+        this[prop] = value;
+      }
+      return true;
+    },
+    enumerable: false,
+    configurable: false
+  });
   
-  deleteProperty(target, prop) {
-    // Remove from database
-    db.db.prepare('DELETE FROM custom_properties WHERE key = ?').run(prop);
-    delete target[prop];
-    return true;
-  }
-});
+  Object.defineProperty(hlvmBase, '__delete', {
+    value: function(prop) {
+      // Remove from database
+      db.db.prepare('DELETE FROM custom_properties WHERE key = ?').run(prop);
+      delete this[prop];
+      return true;
+    },
+    enumerable: false,
+    configurable: false
+  });
+
+  // Return the plain object for TAB completion to work
+  return hlvmBase;
+})();  // End IIFE - hlvmBase is now hidden from global scope
 
 // Global utilities
 globalThis.pprint = (obj) => console.log(JSON.stringify(obj, null, 2));
-
 
 
 // Global shorthand for context

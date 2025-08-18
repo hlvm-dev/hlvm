@@ -29,191 +29,98 @@ async function* streamResponse(response) {
   }
 }
 
-// Generate a completion
-export async function generate(request) {
-  const response = await fetch(`${OLLAMA_HOST}/api/generate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(request)
-  });
+// Generic API request handler - DRY principle
+async function apiRequest(endpoint, method = "GET", body = null) {
+  const options = {
+    method,
+    headers: method !== "GET" ? { "Content-Type": "application/json" } : {}
+  };
+  
+  if (body && method !== "GET") {
+    options.body = JSON.stringify(body);
+  }
+  
+  const response = await fetch(`${OLLAMA_HOST}/api/${endpoint}`, options);
   
   if (!response.ok) {
-    const error = await response.text();
-    let message = `Ollama generate failed: ${response.statusText}`;
+    const errorText = await response.text();
+    let message = `Ollama ${endpoint} failed: ${response.statusText}`;
     try {
-      const parsed = JSON.parse(error);
+      const parsed = JSON.parse(errorText);
       if (parsed.error) message = parsed.error;
     } catch {}
     throw new Error(message);
   }
   
-  if (request.stream === false) {
-    return await response.json();
-  }
-  
-  // Return async generator for streaming
-  return streamResponse(response);
+  return response;
 }
 
-// Chat completion
+// Handle streaming or JSON response - DRY principle
+async function handleResponse(response, request) {
+  if (request?.stream === false) {
+    return await response.json();
+  }
+  return response.headers.get("content-type")?.includes("application/json")
+    ? await response.json()
+    : streamResponse(response);
+}
+
+// API Methods - now much more concise
+export async function generate(request) {
+  const response = await apiRequest("generate", "POST", request);
+  return handleResponse(response, request);
+}
+
 export async function chat(request) {
-  const response = await fetch(`${OLLAMA_HOST}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(request)
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Ollama chat failed: ${response.statusText}`);
-  }
-  
-  if (request.stream === false) {
-    return await response.json();
-  }
-  
-  return streamResponse(response);
+  const response = await apiRequest("chat", "POST", request);
+  return handleResponse(response, request);
 }
 
-// Create a model from a Modelfile
 export async function create(request) {
-  const response = await fetch(`${OLLAMA_HOST}/api/create`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(request)
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Ollama create failed: ${response.statusText}`);
-  }
-  
-  if (request.stream === false) {
-    return await response.json();
-  }
-  
-  return streamResponse(response);
+  const response = await apiRequest("create", "POST", request);
+  return handleResponse(response, request);
 }
 
-// List local models
 export async function list() {
-  const response = await fetch(`${OLLAMA_HOST}/api/tags`);
-  
-  if (!response.ok) {
-    throw new Error(`Ollama list failed: ${response.statusText}`);
-  }
-  
-  return await response.json();
+  const response = await apiRequest("tags");
+  return response.json();
 }
 
-// Show model information
 export async function show(request) {
-  const response = await fetch(`${OLLAMA_HOST}/api/show`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(request)
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Ollama show failed: ${response.statusText}`);
-  }
-  
-  return await response.json();
+  const response = await apiRequest("show", "POST", request);
+  return response.json();
 }
 
-// Copy a model
 export async function copy(request) {
-  const response = await fetch(`${OLLAMA_HOST}/api/copy`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(request)
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Ollama copy failed: ${response.statusText}`);
-  }
-  
-  return response.ok;
+  await apiRequest("copy", "POST", request);
+  return true;
 }
 
-// Delete a model
 export async function deleteModel(request) {
-  const response = await fetch(`${OLLAMA_HOST}/api/delete`, {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(request)
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Ollama delete failed: ${response.statusText}`);
-  }
-  
-  return response.ok;
+  await apiRequest("delete", "DELETE", request);
+  return true;
 }
 
-// Pull a model
 export async function pull(request) {
-  const response = await fetch(`${OLLAMA_HOST}/api/pull`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(request)
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Ollama pull failed: ${response.statusText}`);
-  }
-  
-  if (request.stream === false) {
-    return await response.json();
-  }
-  
-  return streamResponse(response);
+  const response = await apiRequest("pull", "POST", request);
+  return handleResponse(response, request);
 }
 
-// Push a model
 export async function push(request) {
-  const response = await fetch(`${OLLAMA_HOST}/api/push`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(request)
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Ollama push failed: ${response.statusText}`);
-  }
-  
-  if (request.stream === false) {
-    return await response.json();
-  }
-  
-  return streamResponse(response);
+  const response = await apiRequest("push", "POST", request);
+  return handleResponse(response, request);
 }
 
-// Generate embeddings
 export async function embeddings(request) {
-  const response = await fetch(`${OLLAMA_HOST}/api/embeddings`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(request)
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Ollama embeddings failed: ${response.statusText}`);
-  }
-  
-  return await response.json();
+  const response = await apiRequest("embeddings", "POST", request);
+  return response.json();
 }
 
-// List running models
 export async function ps() {
-  const response = await fetch(`${OLLAMA_HOST}/api/ps`);
-  
-  if (!response.ok) {
-    throw new Error(`Ollama ps failed: ${response.statusText}`);
-  }
-  
-  return await response.json();
+  const response = await apiRequest("ps");
+  return response.json();
 }
 
-// Check if Ollama is running
 export async function isRunning() {
   try {
     const response = await fetch(`${OLLAMA_HOST}/api/tags`);

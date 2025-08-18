@@ -26,174 +26,244 @@ interface JSONRPCNotification {
   params?: any;
 }
 
-class HLVMBridge {
+// Handler types for better type safety
+type HandlerFunction = (params: any) => Promise<any>;
+type HandlerRegistry = Map<string, HandlerFunction>;
+
+// Separate handler classes following Single Responsibility Principle
+class SystemHandlers {
+  static getInfo(): Promise<any> {
+    return Promise.resolve({
+      platform: Deno.build.os,
+      arch: Deno.build.arch,
+      version: "2.0",
+      pid: Deno.pid
+    });
+  }
+}
+
+class ModuleHandlers {
+  static async list(): Promise<any> {
+    return globalThis.hlvm?.modules?.list?.() || [];
+  }
+
+  static async save(params: any): Promise<any> {
+    if (!globalThis.hlvm?.modules?.save) {
+      throw new Error("Module save not available");
+    }
+    return globalThis.hlvm.modules.save(params.name, params.code);
+  }
+
+  static async load(params: any): Promise<any> {
+    if (!globalThis.hlvm?.modules?.load) {
+      throw new Error("Module load not available");
+    }
+    return globalThis.hlvm.modules.load(params.name);
+  }
+}
+
+class AIHandlers {
+  static async generate(params: any): Promise<any> {
+    if (!globalThis.hlvm?.ai?.ollama?.chat) {
+      throw new Error("AI not available");
+    }
+    return globalThis.hlvm.ai.ollama.chat(params.prompt, params.model);
+  }
+}
+
+class FileSystemHandlers {
+  static async read(params: any): Promise<string> {
+    return Deno.readTextFile(params.path);
+  }
+
+  static async write(params: any): Promise<{ success: boolean }> {
+    await Deno.writeTextFile(params.path, params.content);
+    return { success: true };
+  }
+
+  static async exists(params: any): Promise<boolean> {
+    try {
+      await Deno.stat(params.path);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+// Connection manager for WebSocket connections
+class ConnectionManager {
   private connections = new Set<WebSocket>();
+
+  add(socket: WebSocket): void {
+    this.connections.add(socket);
+  }
+
+  remove(socket: WebSocket): void {
+    this.connections.delete(socket);
+  }
+
+  get size(): number {
+    return this.connections.size;
+  }
+
+  get all(): Set<WebSocket> {
+    return this.connections;
+  }
+
+  get first(): WebSocket | undefined {
+    return this.connections.values().next().value;
+  }
+
+  clear(): void {
+    for (const socket of this.connections) {
+      socket.close();
+    }
+    this.connections.clear();
+  }
+}
+
+class HLVMBridge {
+  private connectionManager = new ConnectionManager();
   private server?: Deno.HttpServer;
-  private handlers = new Map<string, (params: any) => Promise<any>>();
+  private handlers: HandlerRegistry = new Map();
 
   constructor() {
     this.registerHandlers();
   }
 
-  private registerHandlers() {
-    // GUI Control handlers (eval is handled via stdin/stdout, not WebSocket)
+  private registerHandlers(): void {
+    // System handlers
+    this.handlers.set("system.info", SystemHandlers.getInfo);
 
-    this.handlers.set("system.info", async () => {
-      return {
-        platform: Deno.build.os,
-        arch: Deno.build.arch,
-        version: "2.0",
-        pid: Deno.pid
-      };
-    });
-
-    // Module handlers (keep existing functionality)
-    this.handlers.set("modules.list", async () => {
-      // Call existing hlvm.modules.list() function
-      if (globalThis.hlvm?.modules?.list) {
-        return globalThis.hlvm.modules.list();
-      }
-      return [];
-    });
-
-    this.handlers.set("modules.save", async (params) => {
-      if (globalThis.hlvm?.modules?.save) {
-        return await globalThis.hlvm.modules.save(params.name, params.code);
-      }
-      throw new Error("Module save not available");
-    });
-
-    this.handlers.set("modules.load", async (params) => {
-      if (globalThis.hlvm?.modules?.load) {
-        return await globalThis.hlvm.modules.load(params.name);
-      }
-      throw new Error("Module load not available");
-    });
+    // Module handlers
+    this.handlers.set("modules.list", ModuleHandlers.list);
+    this.handlers.set("modules.save", ModuleHandlers.save);
+    this.handlers.set("modules.load", ModuleHandlers.load);
 
     // AI handlers
-    this.handlers.set("ai.generate", async (params) => {
-      if (globalThis.hlvm?.ai?.ollama?.chat) {
-        return await globalThis.hlvm.ai.ollama.chat(params.prompt, params.model);
-      }
-      throw new Error("AI not available");
-    });
+    this.handlers.set("ai.generate", AIHandlers.generate);
 
     // File system handlers
-    this.handlers.set("fs.read", async (params) => {
-      return await Deno.readTextFile(params.path);
-    });
+    this.handlers.set("fs.read", FileSystemHandlers.read);
+    this.handlers.set("fs.write", FileSystemHandlers.write);
+    this.handlers.set("fs.exists", FileSystemHandlers.exists);
+  }
 
-    this.handlers.set("fs.write", async (params) => {
-      await Deno.writeTextFile(params.path, params.content);
-      return { success: true };
-    });
+  async start(port = 11436): Promise<void> {
+    this.server = Deno.serve({ 
+      port, 
+      onListen: () => console.log(`HLVM Bridge running on ws://localhost:${port}`)
+    }, (req) => this.handleRequest(req));
+  }
 
-    this.handlers.set("fs.exists", async (params) => {
-      try {
-        await Deno.stat(params.path);
-        return true;
-      } catch {
-        return false;
+  private handleRequest(req: Request): Response {
+    if (req.headers.get("upgrade") === "websocket") {
+      return this.handleWebSocketUpgrade(req);
+    }
+    
+    if (req.url.endsWith("/health")) {
+      return this.handleHealthCheck();
+    }
+    
+    return new Response("HLVM Bridge WebSocket Server", { status: 200 });
+  }
+
+  private handleWebSocketUpgrade(req: Request): Response {
+    const { socket, response } = Deno.upgradeWebSocket(req);
+    
+    socket.onopen = () => this.handleSocketOpen(socket);
+    socket.onmessage = (event) => this.handleSocketMessage(socket, event);
+    socket.onclose = () => this.handleSocketClose(socket);
+    socket.onerror = (error) => console.error("WebSocket error:", error);
+    
+    return response;
+  }
+
+  private handleSocketOpen(socket: WebSocket): void {
+    console.log("macOS app connected");
+    this.connectionManager.add(socket);
+    this.sendConnectionNotification(socket);
+  }
+
+  private sendConnectionNotification(socket: WebSocket): void {
+    const notification: JSONRPCNotification = {
+      jsonrpc: "2.0",
+      method: "connection.established",
+      params: {
+        version: "2.0",
+        capabilities: Array.from(this.handlers.keys())
       }
+    };
+    socket.send(JSON.stringify(notification));
+  }
+
+  private async handleSocketMessage(socket: WebSocket, event: MessageEvent): Promise<void> {
+    try {
+      const request = JSON.parse(event.data) as JSONRPCRequest;
+      
+      if (request.jsonrpc !== "2.0") {
+        throw new Error("Invalid JSON-RPC version");
+      }
+
+      if (request.id !== undefined) {
+        await this.handleRequestWithResponse(socket, request);
+      } else {
+        await this.handleNotification(request);
+      }
+    } catch (error) {
+      console.error("Message handling error:", error);
+    }
+  }
+
+  private async handleRequestWithResponse(socket: WebSocket, request: JSONRPCRequest): Promise<void> {
+    const response: JSONRPCResponse = {
+      jsonrpc: "2.0",
+      id: request.id!
+    };
+
+    try {
+      const handler = this.handlers.get(request.method);
+      if (!handler) {
+        response.error = {
+          code: -32601,
+          message: `Method not found: ${request.method}`
+        };
+      } else {
+        response.result = await handler(request.params);
+      }
+    } catch (error) {
+      response.error = {
+        code: -32603,
+        message: error.message
+      };
+    }
+
+    socket.send(JSON.stringify(response));
+  }
+
+  private async handleNotification(request: JSONRPCRequest): Promise<void> {
+    const handler = this.handlers.get(request.method);
+    if (handler) {
+      handler(request.params).catch(console.error);
+    }
+  }
+
+  private handleSocketClose(socket: WebSocket): void {
+    console.log("macOS app disconnected");
+    this.connectionManager.remove(socket);
+  }
+
+  private handleHealthCheck(): Response {
+    return new Response(JSON.stringify({ 
+      status: "ok", 
+      connections: this.connectionManager.size 
+    }), {
+      headers: { "Content-Type": "application/json" }
     });
   }
 
-  async start(port = 11436) {
-    // Start server without blocking
-    this.server = Deno.serve({ port, onListen: () => {
-      console.log(`HLVM Bridge running on ws://localhost:${port}`);
-    }}, (req) => {
-      // Handle WebSocket upgrade
-      if (req.headers.get("upgrade") === "websocket") {
-        const { socket, response } = Deno.upgradeWebSocket(req);
-        
-        socket.onopen = () => {
-          console.log("macOS app connected");
-          this.connections.add(socket);
-          
-          // Send connection confirmation
-          const notification: JSONRPCNotification = {
-            jsonrpc: "2.0",
-            method: "connection.established",
-            params: {
-              version: "2.0",
-              capabilities: Array.from(this.handlers.keys())
-            }
-          };
-          socket.send(JSON.stringify(notification));
-        };
-
-        socket.onmessage = async (event) => {
-          try {
-            const request = JSON.parse(event.data) as JSONRPCRequest;
-            
-            if (request.jsonrpc !== "2.0") {
-              throw new Error("Invalid JSON-RPC version");
-            }
-
-            // Handle request with response
-            if (request.id !== undefined) {
-              const response: JSONRPCResponse = {
-                jsonrpc: "2.0",
-                id: request.id
-              };
-
-              try {
-                const handler = this.handlers.get(request.method);
-                if (!handler) {
-                  response.error = {
-                    code: -32601,
-                    message: `Method not found: ${request.method}`
-                  };
-                } else {
-                  response.result = await handler(request.params);
-                }
-              } catch (error) {
-                response.error = {
-                  code: -32603,
-                  message: error.message
-                };
-              }
-
-              socket.send(JSON.stringify(response));
-            } 
-            // Handle notification (no response)
-            else {
-              const handler = this.handlers.get(request.method);
-              if (handler) {
-                handler(request.params).catch(console.error);
-              }
-            }
-          } catch (error) {
-            console.error("Message handling error:", error);
-          }
-        };
-
-        socket.onclose = () => {
-          console.log("macOS app disconnected");
-          this.connections.delete(socket);
-        };
-
-        socket.onerror = (error) => {
-          console.error("WebSocket error:", error);
-        };
-
-        return response;
-      }
-
-      // Regular HTTP endpoint for health check
-      if (req.url.endsWith("/health")) {
-        return new Response(JSON.stringify({ status: "ok", connections: this.connections.size }), {
-          headers: { "Content-Type": "application/json" }
-        });
-      }
-
-      return new Response("HLVM Bridge WebSocket Server", { status: 200 });
-    });
-  }
-
-  // Send notification to all connected clients
-  broadcast(method: string, params?: any) {
+  broadcast(method: string, params?: any): void {
     const notification: JSONRPCNotification = {
       jsonrpc: "2.0",
       method,
@@ -201,61 +271,66 @@ class HLVMBridge {
     };
     
     const message = JSON.stringify(notification);
-    for (const socket of this.connections) {
+    for (const socket of this.connectionManager.all) {
       if (socket.readyState === WebSocket.OPEN) {
         socket.send(message);
       }
     }
   }
 
-  // Send request to macOS app and wait for response
   async request(method: string, params?: any): Promise<any> {
-    if (this.connections.size === 0) {
+    const socket = this.connectionManager.first;
+    if (!socket) {
       throw new Error("No macOS app connected");
     }
 
-    const socket = this.connections.values().next().value;
-    const id = `req-${Date.now()}-${Math.random()}`;
+    return this.sendRequestAndWaitForResponse(socket, method, params);
+  }
+
+  private sendRequestAndWaitForResponse(socket: WebSocket, method: string, params?: any): Promise<any> {
+    const id = this.generateRequestId();
+    const timeoutMs = 5000;
     
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error("Request timeout"));
-      }, 5000);
-
-      const handler = (event: MessageEvent) => {
-        try {
-          const response = JSON.parse(event.data) as JSONRPCResponse;
-          if (response.id === id) {
-            clearTimeout(timeout);
-            socket.removeEventListener("message", handler);
-            
-            if (response.error) {
-              reject(new Error(response.error.message));
-            } else {
-              resolve(response.result);
-            }
-          }
-        } catch {}
-      };
-
+      const timeout = setTimeout(() => reject(new Error("Request timeout")), timeoutMs);
+      
+      const handler = this.createResponseHandler(id, timeout, resolve, reject);
       socket.addEventListener("message", handler);
       
-      const request: JSONRPCRequest = {
-        jsonrpc: "2.0",
-        id,
-        method,
-        params
-      };
-      
+      const request: JSONRPCRequest = { jsonrpc: "2.0", id, method, params };
       socket.send(JSON.stringify(request));
     });
   }
 
-  stop() {
-    for (const socket of this.connections) {
-      socket.close();
-    }
-    this.connections.clear();
+  private generateRequestId(): string {
+    return `req-${Date.now()}-${Math.random()}`;
+  }
+
+  private createResponseHandler(
+    expectedId: string | number,
+    timeout: NodeJS.Timeout,
+    resolve: (value: any) => void,
+    reject: (reason: any) => void
+  ): (event: MessageEvent) => void {
+    return function handler(event: MessageEvent) {
+      try {
+        const response = JSON.parse(event.data) as JSONRPCResponse;
+        if (response.id === expectedId) {
+          clearTimeout(timeout);
+          (event.target as WebSocket).removeEventListener("message", handler);
+          
+          if (response.error) {
+            reject(new Error(response.error.message));
+          } else {
+            resolve(response.result);
+          }
+        }
+      } catch {}
+    };
+  }
+
+  stop(): void {
+    this.connectionManager.clear();
     this.server?.shutdown();
   }
 }
