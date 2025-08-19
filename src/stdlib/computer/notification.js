@@ -209,3 +209,6 @@ export async function notify(message, title = "Notification", subtitle = "") {
     }
   }
 }
+
+
+// Initialize docs on module load

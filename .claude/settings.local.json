@@ -130,7 +130,14 @@
       "Bash(./test-hlvm:*)",
       "Bash(time:*)",
       "Bash(DEBUG=1 timeout 1 ./hlvm)",
-      "Bash(/tmp/test-observe-comprehensive.js)"
+      "Bash(/tmp/test-observe-comprehensive.js)",
+      "Bash(/tmp/remove-custominspect.sh:*)",
+      "Bash(/tmp/test-docs-display.js)",
+      "Bash(python3:*)",
+      "Bash(/tmp/test-clean-tree.js)",
+      "Bash(/tmp/test-doc-debug.js)",
+      "Bash(/tmp/cleanup-doc-properties.sh:*)",
+      "Bash(/tmp/test-jsdoc.js)"
     ],
     "deny": [],
     "ask": [],

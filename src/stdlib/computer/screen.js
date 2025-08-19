@@ -174,3 +174,6 @@ export async function getScreenSize() {
   // Fallback
   return { width: 1920, height: 1080 };
 }
+
+
+// Initialize docs on module load

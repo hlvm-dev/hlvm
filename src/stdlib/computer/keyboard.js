@@ -288,3 +288,6 @@ export function listKeyListeners() {
   }
   return result;
 }
+
+
+// Initialize docs on module load

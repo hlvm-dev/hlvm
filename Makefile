@@ -11,8 +11,15 @@ TARGETS := \
 	x86_64-pc-windows-msvc \
 	aarch64-apple-darwin
 
-# Default: build, deploy, test everything, and run
-all: build deploy test-all run
+# Default: build, deploy, test everything
+all: build deploy test-all
+
+# Fast: build and deploy only (skip tests for rapid iteration)
+fast: build deploy
+	@echo "⚡ Fast build complete (tests skipped)"
+	@sync
+	@sleep 0.5
+	@./scripts/animated-loading.sh
 
 # Generate embedded stdlib and compile binary for current platform
 build:
@@ -160,6 +167,7 @@ version:
 help:
 	@echo "HLVM Build System Commands:"
 	@echo "  make                    - Build, deploy, test everything, and run REPL"
+	@echo "  make fast               - Fast build and deploy (skip tests)"
 	@echo "  make build              - Build HLVM binary for current platform"
 	@echo "  make build-all          - Build for all platforms (release build)"
 	@echo "  make build-<target>     - Build for specific platform"
@@ -181,4 +189,4 @@ help:
 		echo "  - $$target"; \
 	done
 
-.PHONY: all build build-all build-% release deploy verify test-all test-quick test-all-platforms clean run install uninstall version help
+.PHONY: all fast build build-all build-% release deploy verify test-all test-quick test-all-platforms clean run install uninstall version help

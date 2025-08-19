@@ -474,26 +474,53 @@ class REPLManager {
 
   private showBanner(): void {
     const colors = {
-      purple: '\x1b[38;5;54m',
-      red: '\x1b[38;5;160m',
-      dim: '\x1b[2m',
+      purple: '\x1b[38;5;91m',
+      darkPurple: '\x1b[38;5;54m',
+      red: '\x1b[38;5;197m',
+      gray: '\x1b[38;5;240m',
+      bright: '\x1b[38;5;255m',
       reset: '\x1b[0m'
     };
-
-    console.log(`
-${colors.purple}╔══════════════════════════════╗
-║       ╦ ╦╦  ╦  ╦╔╦╗         ║
-║       ╠═╣║  ╚╗╔╝║║║         ║
-║       ╩ ╩╩═╝ ╚╝ ╩ ╩         ║
-║                              ║
-║  High-Level Virtual Machine  ║
-║       ${colors.red}Version ${HLVM_VERSION}${colors.purple}        ║
-╚══════════════════════════════╝${colors.reset}
-`);
-    
-    Deno.env.set("DENO_REPL_PROMPT", `${colors.purple}> ${colors.reset}`);
+  
+    // Helper to measure visible width (ignore ANSI)
+    const stripAnsi = (s: string) => s.replace(/\x1B\[[0-9;]*m/g, '');
+  
+    // Lines INSIDE the box (no borders). Use colors freely here.
+    const lines = [
+      '',
+      `${colors.purple}██╗  ██╗ ██╗     ██╗   ██╗ ███╗   ███╗`,
+      `${colors.purple}██║  ██║ ██║     ██║   ██║ ████╗ ████║`,
+      `${colors.purple}███████║ ██║     ██║   ██║ ██╔████╔██║`,
+      `${colors.purple}██╔══██║ ██║     ╚██╗ ██╔╝ ██║╚██╔╝██║`,
+      `${colors.purple}██║  ██║ ███████╗ ╚████╔╝  ██║ ╚═╝ ██║`,
+      `${colors.purple}╚═╝  ╚═╝ ╚══════╝  ╚═══╝   ╚═╝     ╚═╝`,
+      '',
+      `${colors.bright}HIGH-LEVEL VIRTUAL MACHINE     ${colors.red}v${HLVM_VERSION}`,
+      `${colors.gray}Powered by Deno (github.com/denoland/deno)`,
+      `${colors.gray}& Ollama (github.com/ollama/ollama)`
+    ];
+  
+    // Compute max visible width and build borders with 1 space padding on each side
+    const contentWidth = Math.max(...lines.map(l => stripAnsi(l).length));
+    const top    = `${colors.darkPurple}╔${'═'.repeat(contentWidth + 2)}╗`;
+    const bottom = `${colors.darkPurple}╚${'═'.repeat(contentWidth + 2)}╝${colors.reset}`;
+  
+    // Render each line with proper right padding (switch back to border color for spaces)
+    const boxed = [
+      top,
+      ...lines.map(line => {
+        const visible = stripAnsi(line).length;
+        const pad = contentWidth - visible;
+        return `${colors.darkPurple}║ ${line}${colors.darkPurple}${' '.repeat(pad)} ║`;
+      }),
+      bottom
+    ].join('\n');
+  
+    console.log(`\n${boxed}\n`);
+    Deno.env.set("DENO_REPL_PROMPT", `${colors.purple}λ ${colors.reset}`);
     console.log("HLVM ready. Type 'hlvm.help()' for help.");
   }
+  
 
   private async startREPL(denoPath: string, initScriptPath: string): Promise<void> {
     try {

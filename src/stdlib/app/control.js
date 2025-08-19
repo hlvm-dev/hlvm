@@ -177,16 +177,24 @@ const APP_REGISTRY = {
  */
 class PlatformAdapter {
   constructor() {
+    // Lazy initialization to avoid circular dependency
+    this._initialized = false;
+  }
+  
+  _init() {
+    if (this._initialized) return;
     this.platform = globalThis.hlvm.core.system.os;
     this.isDarwin = globalThis.hlvm.core.system.isDarwin;
     this.isWindows = globalThis.hlvm.core.system.isWindows;
     this.isLinux = globalThis.hlvm.core.system.isLinux;
+    this._initialized = true;
   }
 
   /**
    * Resolve app identifier for current platform
    */
   resolveAppName(identifier) {
+    this._init(); // Ensure initialized
     // Check if it's a known app alias
     const lowerName = identifier.toLowerCase();
     if (APP_REGISTRY[lowerName]) {
@@ -210,6 +218,7 @@ class PlatformAdapter {
    * List running applications
    */
   async listApps() {
+    this._init(); // Ensure initialized
     if (this.isDarwin) {
       const script = `tell application "System Events" to get name of every process whose background only is false`;
       const result = await this.runAppleScript(script);
@@ -234,6 +243,7 @@ class PlatformAdapter {
    * Get frontmost application
    */
   async getFrontmost() {
+    this._init();
     if (this.isDarwin) {
       const script = `tell application "System Events" to get name of first process whose frontmost is true`;
       const name = await this.runAppleScript(script);
@@ -262,9 +272,14 @@ public class Win32 {
   }
 
   /**
-   * Launch application
+   * Launch application and wait for it to be ready
    */
   async launchApp(appName) {
+    this._init();
+    
+    // Check if already running
+    const wasRunning = await this.isAppRunning(appName);
+    
     if (this.isDarwin) {
       const script = `tell application "${appName}" to launch`;
       await this.runAppleScript(script);
@@ -275,12 +290,58 @@ public class Win32 {
     else if (this.isLinux) {
       await this.executeCommand(`${appName} &`);
     }
+    
+    // If app wasn't running, wait for it to be ready
+    if (!wasRunning) {
+      await this.waitForApp(appName);
+    }
+    
+    return !wasRunning; // Return true if we launched it
+  }
+  
+  /**
+   * Wait for application to be ready (windows loaded, responsive)
+   */
+  async waitForApp(appName, maxWait = 10000) {
+    this._init();
+    const startTime = Date.now();
+    
+    // First wait for process to exist
+    while (Date.now() - startTime < maxWait) {
+      if (await this.isAppRunning(appName)) {
+        break;
+      }
+      await new Promise(r => setTimeout(r, 100));
+    }
+    
+    // Then wait for window to be ready (check if it has windows)
+    if (this.isDarwin) {
+      // Wait for app to have at least one window
+      const waitScript = `
+        tell application "${appName}"
+          repeat 50 times
+            try
+              if (count windows) > 0 then
+                return true
+              end if
+            end try
+            delay 0.1
+          end repeat
+          return false
+        end tell
+      `;
+      await this.runAppleScript(waitScript);
+    }
+    
+    // Additional small delay for UI to be fully ready
+    await new Promise(r => setTimeout(r, 200));
   }
 
   /**
    * Activate (bring to front) application
    */
   async activateApp(appName) {
+    this._init();
     if (this.isDarwin) {
       const script = `tell application "${appName}" to activate`;
       await this.runAppleScript(script);
@@ -299,6 +360,7 @@ public class Win32 {
    * Quit application
    */
   async quitApp(appName) {
+    this._init();
     if (this.isDarwin) {
       const script = `tell application "${appName}" to quit`;
       await this.runAppleScript(script);
@@ -315,6 +377,7 @@ public class Win32 {
    * Check if application is running
    */
   async isAppRunning(appName) {
+    this._init();
     if (this.isDarwin) {
       const script = `tell application "System Events" to (name of processes) contains "${appName}"`;
       const result = await this.runAppleScript(script);
@@ -337,6 +400,7 @@ public class Win32 {
    * Hide application
    */
   async hideApp(appName) {
+    this._init();
     if (this.isDarwin) {
       const script = `tell application "System Events" to set visible of process "${appName}" to false`;
       await this.runAppleScript(script);
@@ -355,6 +419,7 @@ public class Win32 {
    * Show application
    */
   async showApp(appName) {
+    this._init();
     if (this.isDarwin) {
       const script = `tell application "System Events" to set visible of process "${appName}" to true`;
       await this.runAppleScript(script);
@@ -370,9 +435,43 @@ public class Win32 {
   }
 
   /**
+   * Maximize application window
+   */
+  async maximizeApp(appName) {
+    this._init();
+    
+    if (this.isDarwin) {
+      // Use AppleScript to click the green maximize button
+      const script = `
+        tell application "System Events"
+          tell process "${appName}"
+            try
+              click button 2 of window 1
+            on error
+              -- Fallback to fullscreen shortcut
+              keystroke "f" using {command down, control down}
+            end try
+          end tell
+        end tell
+      `;
+      await this.runAppleScript(script);
+    }
+    else if (this.isWindows) {
+      // Windows maximize
+      const command = `powershell -Command "(New-Object -ComObject Shell.Application).Windows() | Where-Object {$_.Name -like '*${appName}*'} | ForEach-Object {$_.Maximize()}"`;
+      await this.executeCommand(command);
+    }
+    else if (this.isLinux) {
+      // Linux maximize using wmctrl
+      await this.executeCommand(`wmctrl -r "${appName}" -b add,maximized_vert,maximized_horz`);
+    }
+  }
+  
+  /**
    * Send keyboard shortcut to application
    */
   async sendKeys(appName, keys) {
+    this._init();
     // First activate the app
     await this.activateApp(appName);
     await new Promise(resolve => setTimeout(resolve, 200)); // Small delay
@@ -412,6 +511,7 @@ public class Win32 {
    * Type text into application
    */
   async typeText(appName, text) {
+    this._init();
     await this.activateApp(appName);
     await new Promise(resolve => setTimeout(resolve, 200));
     
@@ -434,6 +534,7 @@ public class Win32 {
    * macOS-specific: Run AppleScript
    */
   async runAppleScript(script) {
+    this._init();
     if (!this.isDarwin) return '';
     
     try {
@@ -541,6 +642,42 @@ export async function get(identifier) {
      */
     async type(text) {
       return await platform.typeText(appName, text);
+    },
+    
+    /**
+     * Maximize/fullscreen the application window
+     */
+    async maximize() {
+      // First ensure app is running and active
+      const launched = await this.launch();
+      await this.activate();
+      
+      // Wait a bit more if we just launched
+      if (launched) {
+        await new Promise(r => setTimeout(r, 500));
+      }
+      
+      return await platform.maximizeApp(appName);
+    },
+    
+    /**
+     * Open app with callback or promise chain
+     * @param {Function} [callback] - Optional callback when ready
+     */
+    async open(callback) {
+      const launched = await this.launch();
+      await this.activate();
+      
+      // If just launched, ensure it's ready
+      if (launched) {
+        await platform.waitForApp(appName);
+      }
+      
+      if (callback && typeof callback === 'function') {
+        return await callback(this);
+      }
+      
+      return this; // Allow chaining
     }
   };
 }
@@ -577,6 +714,7 @@ export function aliases() {
  * @returns {boolean} True if available on current platform
  */
 export function isAvailable(alias) {
+  platform._init();
   const lowerName = alias.toLowerCase();
   if (!APP_REGISTRY[lowerName]) return false;
   return APP_REGISTRY[lowerName][platform.platform] !== null;

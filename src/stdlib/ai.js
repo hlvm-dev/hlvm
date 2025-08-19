@@ -517,106 +517,117 @@ export async function refactor(input, options = {}) {
 }
 
 // Export both functions for use in hlvm.stdlib.ai
-// Initialize documentation for functions
-function initializeDocs() {
-  // Setup revise documentation
-  revise.__doc__ = `\x1b[36mrevise(input?, options?)\x1b[0m
-
-Revises text using AI to improve clarity, grammar, and tone
-
-\x1b[33mParameters:\x1b[0m
-  input: \x1b[90mstring\x1b[0m (optional) - Text to revise (uses clipboard if empty)
-  options: \x1b[90mObject\x1b[0m (optional) - Revision options
-    tone: 'default'|'professional'|'casual'|'friendly'|'concise'|'formal'
-
-\x1b[33mReturns:\x1b[0m Promise<string> - Revised text
-
-\x1b[33mExamples:\x1b[0m
-  await revise("thx for ur help")
-  \x1b[32m// → "Thank you for your help"\x1b[0m
-  
-  await revise("hey can u send the files", {tone: "professional"})
-  \x1b[32m// → "Could you please send the files?"\x1b[0m
-  
-  await revise() // Revises clipboard content
-  \x1b[32m// → [Revised text from clipboard]\x1b[0m`;
-  
-  revise[Symbol.for('Deno.customInspect')] = function() {
-    return revise.__doc__;
-  };
-  
-  // Setup draw documentation
-  draw.__doc__ = `\x1b[36mdraw(input?, options?)\x1b[0m
-
-Creates ASCII diagrams from text using AI
-
-\x1b[33mParameters:\x1b[0m
-  input: \x1b[90mstring\x1b[0m (optional) - Text to visualize (uses clipboard if empty)
-  options: \x1b[90mObject\x1b[0m (optional) - Drawing options
-    type: 'auto'|'flowchart'|'sequence'|'tree'|'graph'|'mindmap'|'table'
-    style: 'simple'|'detailed'
-
-\x1b[33mReturns:\x1b[0m Promise<string> - ASCII diagram
-
-\x1b[33mExamples:\x1b[0m
-  await draw("login -> validate -> dashboard")
-  \x1b[32m// → ┌─────┐    ┌──────────┐    ┌───────────┐
-  //   │login│───▶│ validate │───▶│ dashboard │
-  //   └─────┘    └──────────┘    └───────────┘\x1b[0m
-  
-  await draw("user story steps", {type: "sequence"})
-  \x1b[32m// → User     System     Database
-  //   │         │           │
-  //   │─login──▶│           │
-  //   │         │──query───▶│
-  //   │         │◀──result──│\x1b[0m`;
-  
-  draw[Symbol.for('Deno.customInspect')] = function() {
-    return draw.__doc__;
-  };
-  
-  // Setup refactor documentation
-  refactor.__doc__ = `\x1b[36mrefactor(input?, options?)\x1b[0m
-
-Refactors code using AI to improve quality, remove redundancy, apply best practices
-
-\x1b[33mParameters:\x1b[0m
-  input: \x1b[90mstring\x1b[0m (optional) - Code to refactor (uses clipboard if empty)
-  options: \x1b[90mObject\x1b[0m (optional) - Refactoring options
-    type: 'all'|'clean'|'solid'|'dry'|'unused'|'simplify'|'modern'|'performance'
-
-\x1b[33mTypes:\x1b[0m
-  all        - Comprehensive refactor (default) - applies everything
-  clean      - Apply Clean Code principles, improve naming
-  solid      - Apply SOLID principles, improve design
-  dry        - Remove ALL redundancy and duplication
-  unused     - Remove unused code, imports, variables
-  simplify   - Make code simpler and more readable
-  modern     - Update to modern syntax and patterns
-  performance - Optimize for speed and memory
-
-\x1b[33mReturns:\x1b[0m Promise<string> - Refactored code
-
-\x1b[33mExamples:\x1b[0m
-  await refactor(uglyCode)  // Default: comprehensive refactor
-  \x1b[32m// → [Fully refactored code with all improvements]\x1b[0m
-  
-  await refactor(code, {type: "unused"})  // Remove dead code only
-  \x1b[32m// → [Code with unused elements removed]\x1b[0m
-  
-  await refactor()  // Refactor clipboard code
-  \x1b[32m// → [Refactored code from clipboard]\x1b[0m`;
-  
-  refactor[Symbol.for('Deno.customInspect')] = function() {
-    return refactor.__doc__;
-  };
-}
 
 // Initialize on module load
-initializeDocs();
+
+/**
+ * Simple chat with AI - ask any question and get an answer
+ * @param {string} input - Question to ask (uses clipboard if empty)
+ * @param {Object} [options] - Chat options
+ * @param {string} [options.model] - Model to use (defaults to env setting)
+ * @param {boolean} [options.stream=true] - Stream the response
+ * @param {number} [options.temperature] - Response creativity (0-2, default 0.7)
+ * @returns {Promise<string>} AI response
+ * @example
+ * await ask("What is the capital of France?")
+ * // → "The capital of France is Paris."
+ * @example
+ * await ask("Explain quantum computing in simple terms")
+ * // → [Detailed explanation...]
+ * @example
+ * await ask() // Ask from clipboard
+ * // → [Answer to clipboard question]
+ */
+export async function ask(input, options = {}) {
+  // 1. Get question to ask
+  let question = input;
+  if (!question) {
+    // Use clipboard as default input source
+    question = await globalThis.hlvm.core.io.clipboard.read();
+  }
+  
+  // Validate we have a question
+  if (!question || question.trim() === '') {
+    throw new Error('No question to ask (input is empty and clipboard is empty)');
+  }
+  
+  // 2. Get model from options or env
+  let model = options.model || globalThis.hlvm?.env?.get("ai.model") || getDefaultModel();
+  
+  // 3. Ensure model is available (auto-download if needed)
+  await ensureModel(model);
+  
+  // 4. Call Ollama for chat
+  try {
+    const stream = options.stream !== false; // Default to streaming
+    
+    if (stream) {
+      // Show thinking indicator
+      console.log('\x1b[36m💭 Thinking...\x1b[0m\n');
+      
+      const response = await globalThis.hlvm.core.ai.ollama.chat({
+        model,
+        messages: [
+          { role: 'user', content: question }
+        ],
+        stream: true,
+        options: {
+          temperature: options.temperature || globalThis.hlvm?.env?.get("ai.temperature") || 0.7,
+          num_predict: globalThis.hlvm?.env?.get("ai.max_tokens") || 2000,
+          top_p: 0.95,
+          repeat_penalty: 1.1
+        }
+      });
+      
+      // Collect streaming response with visual feedback
+      let answer = '';
+      process.stdout.write('\x1b[32m');  // Green color for answer
+      
+      for await (const chunk of response) {
+        if (chunk.message?.content) {
+          process.stdout.write(chunk.message.content);
+          answer += chunk.message.content;
+        }
+      }
+      
+      process.stdout.write('\x1b[0m\n');  // Reset color and newline
+      return answer.trim();
+      
+    } else {
+      // Non-streaming mode (for programmatic use)
+      const response = await globalThis.hlvm.core.ai.ollama.chat({
+        model,
+        messages: [
+          { role: 'user', content: question }
+        ],
+        stream: false,
+        options: {
+          temperature: options.temperature || globalThis.hlvm?.env?.get("ai.temperature") || 0.7,
+          num_predict: globalThis.hlvm?.env?.get("ai.max_tokens") || 2000,
+          top_p: 0.95,
+          repeat_penalty: 1.1
+        }
+      });
+      
+      return response.message?.content || '';
+    }
+    
+  } catch (error) {
+    console.error('Failed to get answer:', error.message);
+    
+    // If Ollama is not running, provide helpful message
+    if (error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED')) {
+      console.error('Ollama service is not running. Start it with: hlvm ollama serve');
+      return '[Ollama not running]';
+    }
+    
+    return `[Error: ${error.message}]`;
+  }
+}
 
 export default {
   revise,
   draw,
+  ask,
   refactor
 };

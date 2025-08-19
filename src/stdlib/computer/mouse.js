@@ -245,3 +245,6 @@ export async function drag(fromX, fromY, toX, toY) {
     }
   });
 }
+
+
+// Initialize docs on module load

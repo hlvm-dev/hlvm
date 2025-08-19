@@ -136,3 +136,6 @@ export async function isAvailable() {
     return false;
   }
 }
+
+
+// Initialize docs on module load

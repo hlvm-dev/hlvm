@@ -20,14 +20,17 @@ import ui from "./stdlib/ui/control.js";
 import appControl from "./stdlib/app/control.js";
 import { context as computerContext } from "./stdlib/computer/context.js";
 
-// Import stdlib AI module
-import * as stdlibAI from "./stdlib/ai.js";
+// Import stdlib AI module (default export)
+import stdlibAI from "./stdlib/ai.js";
 
 // Import core event module
 import * as event from "./stdlib/core/event.js";
 
 // Import environment settings module
 import * as env from "./stdlib/core/env.js";
+
+// Import documentation registry
+import docRegistry from "./stdlib/documentation.js";
 
 // Create hlvm namespace inside IIFE to hide from global scope
 globalThis.hlvm = (() => {
@@ -207,7 +210,8 @@ globalThis.hlvm = (() => {
       ai: {
         revise: stdlibAI.revise,
         draw: stdlibAI.draw,
-        refactor: stdlibAI.refactor
+        refactor: stdlibAI.refactor,
+        ask: stdlibAI.ask
       }
     },
     
@@ -475,43 +479,6 @@ Examples:
   setupAliases();
   setupCustomPropertyPersistence();
 
-  // Add custom property setter directly to the clean object
-  // This preserves TAB completion while allowing custom properties
-  Object.defineProperty(cleanHlvm, '__set', {
-    value: function(prop, value) {
-      const systemProps = ['core', 'app', 'stdlib', 'env', 'context', 'help', 'status', '__set', '__delete'];
-      
-      if (systemProps.includes(prop)) {
-        console.error(`Cannot override system property: hlvm.${prop}`);
-        return false;
-      }
-      
-      // Save to database for persistence
-      saveCustomProperty(prop, value);
-      
-      // Set the value
-      if (value === null || value === undefined) {
-        delete this[prop];
-      } else {
-        this[prop] = value;
-      }
-      return true;
-    },
-    enumerable: false,
-    configurable: false
-  });
-  
-  Object.defineProperty(cleanHlvm, '__delete', {
-    value: function(prop) {
-      // Remove from database
-      db.db.prepare('DELETE FROM custom_properties WHERE key = ?').run(prop);
-      delete this[prop];
-      return true;
-    },
-    enumerable: false,
-    configurable: false
-  });
-
   // Return the clean object for TAB completion to work
   return cleanHlvm;
 })();  // End IIFE - hlvmBase is now hidden from global scope
@@ -519,36 +486,118 @@ Examples:
 // Global utilities
 globalThis.pprint = (obj) => console.log(JSON.stringify(obj, null, 2));
 
-// Setup custom inspect for functions with documentation
-(function setupFunctionDocs() {
-  // Create a special inspect symbol for documented functions
-  const inspectSymbol = Symbol.for('Deno.customInspect');
+// Global functions for custom property persistence
+globalThis.hlvmSet = function(prop, value) {
+  const systemProps = ['core', 'app', 'stdlib', 'env', 'context', 'help', 'status'];
   
-  // Helper to attach docs to a function
-  globalThis.__attachDocs = function(func, doc) {
-    func.__doc__ = doc;
-    func[inspectSymbol] = function() {
-      return this.__doc__;
-    };
-    return func;
-  };
+  if (systemProps.includes(prop)) {
+    console.error(`Cannot override system property: hlvm.${prop}`);
+    return false;
+  }
   
-  // Process all functions in hlvm namespace to add inspect if they have __doc__
-  function processObject(obj, path = '') {
-    for (const key in obj) {
-      const value = obj[key];
-      if (typeof value === 'function' && value.__doc__) {
-        value[inspectSymbol] = function() {
-          return this.__doc__;
-        };
-      } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        processObject(value, path ? `${path}.${key}` : key);
+  // Save to database for persistence
+  let serialized;
+  let type = typeof value;
+  
+  if (value === null || value === undefined) {
+    // Handle null/undefined - remove from database
+    globalThis.hlvm.core.storage.db.prepare('DELETE FROM custom_properties WHERE key = ?').run(prop);
+    delete globalThis.hlvm[prop];
+    return true;
+  }
+  
+  if (type === 'function') {
+    serialized = value.toString();
+  } else {
+    serialized = JSON.stringify(value);
+  }
+  
+  globalThis.hlvm.core.storage.db.prepare(`
+    INSERT OR REPLACE INTO custom_properties (key, value, type, updated_at)
+    VALUES (?, ?, ?, ?)
+  `).run(prop, serialized, type, Date.now());
+  
+  // Set the value on hlvm
+  globalThis.hlvm[prop] = value;
+  return true;
+};
+
+globalThis.hlvmDelete = function(prop) {
+  // Remove from database
+  globalThis.hlvm.core.storage.db.prepare('DELETE FROM custom_properties WHERE key = ?').run(prop);
+  // Remove from hlvm object
+  delete globalThis.hlvm[prop];
+  return true;
+};
+
+// Helper to display function documentation
+globalThis.doc = function(func) {
+  let path = '';
+  
+  // Handle string path like 'hlvm.core.io.fs.read'
+  if (typeof func === 'string') {
+    path = func;
+    // Look up documentation directly
+    if (docRegistry.has(path)) {
+      console.log(docRegistry.get(path));
+      return;
+    }
+    // Try to resolve the path to get the function
+    try {
+      const parts = func.split('.');
+      let current = globalThis;
+      for (const part of parts) {
+        current = current[part];
+        if (!current) {
+          console.log(`Path not found: ${func}`);
+          return;
+        }
       }
+      func = current;
+    } catch (e) {
+      console.log(`Error accessing: ${func}`);
+      return;
     }
   }
   
-  // Process the hlvm namespace after a small delay to ensure all modules are loaded
-  setTimeout(() => processObject(globalThis.hlvm), 100);
-})();
+  // Handle direct function - find its path
+  if (typeof func === 'function') {
+    // Try to find the path for this function
+    function findPath(obj, target, currentPath = '') {
+      for (const key in obj) {
+        const newPath = currentPath ? `${currentPath}.${key}` : key;
+        if (obj[key] === target) {
+          return newPath;
+        }
+        if (typeof obj[key] === 'object' && obj[key] !== null) {
+          const found = findPath(obj[key], target, newPath);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+    path = findPath(globalThis.hlvm, func, 'hlvm');
+    
+    // Look up documentation
+    if (path && docRegistry.has(path)) {
+      console.log(docRegistry.get(path));
+    } else {
+      // No documentation found
+      const funcName = func.name || 'anonymous';
+      console.log(`\x1b[36m${funcName}(...)\x1b[0m`);
+      console.log('\nNo documentation available');
+    }
+  } else if (typeof func === 'object' && func !== null) {
+    // Show object properties
+    console.log(`\x1b[36mObject\x1b[0m`);
+    console.log('\nProperties:');
+    for (const key in func) {
+      const type = typeof func[key];
+      console.log(`  ${key}: \x1b[90m${type}\x1b[0m`);
+    }
+  } else {
+    console.log('Usage: doc(function) or doc("path.to.function")');
+  }
+};
 
 // Global shorthand for context - removed to prevent startup issues
