@@ -15,7 +15,7 @@ export async function type(text) {
     const script = `tell application "System Events" to keystroke "${escapedText}"`;
     const result = await new Deno.Command("osascript", { args: ["-e", script] }).output();
     if (!result.success) {
-      const error = new TextDecoder().decode(result.stderr);
+      const error = decode(result.stderr);
       if (error.includes("not allowed to send keystrokes")) {
         throw new Error("Keyboard control requires accessibility permissions. Go to System Settings → Privacy & Security → Accessibility and add your terminal app.");
       }
@@ -181,7 +181,7 @@ export async function press(keys) {
     
     const result = await new Deno.Command("osascript", { args: ["-e", script] }).output();
     if (!result.success) {
-      const error = new TextDecoder().decode(result.stderr);
+      const error = decode(result.stderr);
       if (error.includes("not allowed to send keystrokes")) {
         throw new Error("Keyboard control requires accessibility permissions. Go to System Settings → Privacy & Security → Accessibility and add your terminal app.");
       }

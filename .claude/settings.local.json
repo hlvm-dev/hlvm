@@ -150,7 +150,13 @@
       "Bash(/tmp/final-ui-test.sh:*)",
       "Bash(/tmp/test-improved-ui.sh:*)",
       "Bash(/tmp/test-ask-spacing.sh:*)",
-      "Bash(/tmp/test-ui-final.sh:*)"
+      "Bash(/tmp/test-ui-final.sh:*)",
+      "Bash(/tmp/test-ui-spacing.sh:*)",
+      "WebFetch(domain:www.linkedin.com)",
+      "WebFetch(domain:tbdc.com)",
+      "WebFetch(domain:thebhive.ca)",
+      "WebFetch(domain:planethatch.com)",
+      "Bash(/tmp/test-yn-in-repl.sh:*)"
     ],
     "deny": [],
     "ask": [],

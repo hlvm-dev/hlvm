@@ -72,13 +72,13 @@ export function set(key, value) {
   // Only allow known settings
   const schema = SCHEMA[key];
   if (!schema) {
-    console.warn(`⚠️ Unknown setting '${key}' (ignored)`);
+    // Unknown setting - silently ignore
     return undefined;
   }
   
   // Validate value
   if (!schema.validate(value)) {
-    console.warn(`⚠️ Invalid value for ${key} (expected ${schema.type}), keeping current value`);
+    // Invalid value type - keep current value
     return get(key); // Return current value
   }
   
@@ -134,7 +134,7 @@ export function reset(key) {
   if (key) {
     // Reset single setting to default
     if (!SCHEMA[key]) {
-      console.warn(`⚠️ Unknown setting '${key}'`);
+      // Unknown setting - ignore
       return false;
     }
     db.prepare('DELETE FROM hlvm_env WHERE key = ?').run(key);

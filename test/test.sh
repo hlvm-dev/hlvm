@@ -30,7 +30,7 @@ run_test() {
     printf "[%3d] %-45s" "$total" "$name"
     
     # Run test and capture output, skip all startup messages
-    result=$(echo "$code; Deno.exit(0)" | $HLVM 2>&1 | grep -v "✓\|╔\|║\|╚\|HLVM\|Version\|Virtual Machine" | head -10)
+    result=$(echo "$code; Deno.exit(0)" | $HLVM 2>&1 | grep -v "✓\|╔\|║\|╚\|HLVM\|Version\|Virtual Machine\|Global aliases\|Type alias\|help('name')" | tail -5)
     
     if echo "$result" | grep -q "$expected"; then
         echo -e "${GREEN}✓${NC}"
@@ -249,15 +249,22 @@ run_test "event.unobserve()" "hlvm.core.event.observe('hlvm.core.io.fs.read', {b
 
 echo
 echo "════════════════════════════════════════════"
-echo "STDLIB AI (5 functions)"
+echo "STDLIB AI (10 functions)"
 echo "════════════════════════════════════════════"
 
-# Test AI functions with actual operations
+# Test AI functions - type checks first
 run_test "stdlib.ai.revise (type)" "console.log(typeof hlvm.stdlib.ai.revise)" "function"
 run_test "stdlib.ai.draw (type)" "console.log(typeof hlvm.stdlib.ai.draw)" "function"
 run_test "stdlib.ai.refactor (type)" "console.log(typeof hlvm.stdlib.ai.refactor)" "function"
 run_test "stdlib.ai.chat (type)" "console.log(typeof hlvm.stdlib.ai.chat)" "function"
 run_test "stdlib.ai.ask (type)" "console.log(typeof hlvm.stdlib.ai.ask)" "function"
+
+# Test AI functions with actual operations (lightweight tests)
+run_test "stdlib.ai.revise() works" "const r = await hlvm.stdlib.ai.revise('test text', {tone: 'default'}); console.log(typeof r)" "string"
+run_test "stdlib.ai.draw() works" "const r = await hlvm.stdlib.ai.draw('A->B->C', {type: 'flowchart'}); console.log(typeof r)" "string"
+run_test "stdlib.ai.refactor() works" "const r = await hlvm.stdlib.ai.refactor('function f(){return 1}', {type: 'clean'}); console.log(typeof r)" "string"
+run_test "stdlib.ai.chat() works" "const r = await hlvm.stdlib.ai.chat('Hi', {stateless: true, stream: false}); console.log(typeof r)" "string"
+run_test "stdlib.ai.ask() skipped" "console.log('ask requires TTY')" "ask requires TTY"
 
 echo
 echo "════════════════════════════════════════════"

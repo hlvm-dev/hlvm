@@ -2,7 +2,6 @@
 
 import { DatabaseSync } from "node:sqlite";  // Works in compiled binaries!
 import * as platform from "./platform.js";
-import { notifyModulesChanged, notifyEvent } from "./notifier.js";
 
 // Module configuration
 class ModuleConfig {
@@ -206,7 +205,7 @@ class ModuleOperations {
       const metadata = this.createMetadata(hasDefaultFunction);
       this.saveToDatabase(name, fileName, hasDefaultFunction, metadata);
       
-      await notifyModulesChanged();
+      // Module change notification removed - no longer needed
       return true;
     } catch (error) {
       await this.handleSaveError(name, error);
@@ -242,7 +241,8 @@ class ModuleOperations {
 
   async handleSaveError(name, error) {
     console.error(`❌ Failed to save '${name}': ${error.message}`);
-    await notifyEvent('module.bundle.failed', {
+    // Event notification removed - simplified error handling
+    console.error('Module bundle failed:', {
       name,
       error: error.message,
       type: error.type || 'unknown'
@@ -328,7 +328,7 @@ class ModuleOperations {
       }
       
       this.dbManager.db.prepare("DELETE FROM modules WHERE key = ?").run(name);
-      await notifyModulesChanged();
+      // Module change notification removed - no longer needed
       
       return true;
     } catch (e) {

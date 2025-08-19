@@ -1,6 +1,7 @@
 // Screen module - Cross-platform screen capture
 
 import * as platform from "../core/platform.js";
+import { decode } from "../core/platform.js";
 
 export async function capture(output = null, options = {}) {
   // Use platform-specific temp file if no output specified
@@ -112,7 +113,7 @@ export async function getScreenSize() {
     }).output();
     
     try {
-      const data = JSON.parse(new TextDecoder().decode(stdout));
+      const data = JSON.parse(decode(stdout));
       const display = data.SPDisplaysDataType[0].spdisplays_ndrvs[0];
       const resolution = display._spdisplays_resolution.match(/(\d+) x (\d+)/);
       if (resolution) {
@@ -135,7 +136,7 @@ export async function getScreenSize() {
       args: ["-NoProfile", "-Command", script]
     }).output();
     
-    const [width, height] = new TextDecoder().decode(stdout).trim().split(",");
+    const [width, height] = decode(stdout).trim().split(",");
     return {
       width: parseInt(width),
       height: parseInt(height)
@@ -148,7 +149,7 @@ export async function getScreenSize() {
         args: ["--current"]
       }).output();
       
-      const output = new TextDecoder().decode(stdout);
+      const output = decode(stdout);
       const match = output.match(/primary (\d+)x(\d+)/);
       if (match) {
         return {
@@ -159,7 +160,7 @@ export async function getScreenSize() {
     } catch {
       try {
         const { stdout } = await new Deno.Command("xdpyinfo").output();
-        const output = new TextDecoder().decode(stdout);
+        const output = decode(stdout);
         const match = output.match(/dimensions:\s+(\d+)x(\d+)/);
         if (match) {
           return {
