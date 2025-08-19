@@ -180,8 +180,8 @@ globalThis.hlvm = (() => {
         list: event.list
       },
       
-      // Function aliases - global function management
-      fn: {
+      // Global aliases - create shortcuts to any hlvm path
+      alias: {
         set: async (name, path) => createAlias(name, path),
         get: (name) => getAlias(name),
         list: () => listAliases(),
@@ -205,15 +205,15 @@ globalThis.hlvm = (() => {
             if (filter) {
               console.log(`\x1b[33mNo global functions matching '${filter}'\x1b[0m`);
             } else {
-              console.log(`\x1b[33mNo global functions registered yet.\x1b[0m`);
-              console.log(`\x1b[90mCreate one with: hlvm.core.fn.set('name', 'path.to.function')\x1b[0m`);
-              console.log(`\x1b[90mExample: hlvm.core.fn.set('ask', 'hlvm.stdlib.ai.ask')\x1b[0m`);
+              console.log(`\x1b[33mNo global aliases registered yet.\x1b[0m`);
+              console.log(`\x1b[90mCreate one with: hlvm.core.alias.set('name', 'path.to.function')\x1b[0m`);
+              console.log(`\x1b[90mExample: hlvm.core.alias.set('ask', 'hlvm.stdlib.ai.ask')\x1b[0m`);
             }
             return [];
           }
           
           // Display in a nice format
-          console.log(`\n\x1b[36m═══ Global Functions${filter ? ` (filtered: ${filter})` : ''} ═══\x1b[0m\n`);
+          console.log(`\n\x1b[36m═══ Global Aliases${filter ? ` (filtered: ${filter})` : ''} ═══\x1b[0m\n`);
           
           // Group by category if possible
           const categorized = {};
@@ -286,6 +286,7 @@ globalThis.hlvm = (() => {
         revise: stdlibAI.revise,
         draw: stdlibAI.draw,
         refactor: stdlibAI.refactor,
+        chat: stdlibAI.chat,
         ask: stdlibAI.ask
       }
     },
@@ -310,16 +311,16 @@ globalThis.hlvm = (() => {
 \x1b[36m═══════════════════════════════════════════════════════════════\x1b[0m
 
 \x1b[33m🚀 DISCOVERY COMMANDS:\x1b[0m
-  \x1b[32mfn()\x1b[0m                     - List all global functions you can use
+  \x1b[32malias()\x1b[0m                  - List all global aliases you can use
   \x1b[32mhelp('name')\x1b[0m             - Get help for specific function (e.g., help('ask'))
   \x1b[32mhelp(functionName)\x1b[0m       - Get help for function object (e.g., help(ask))
   
-${hasAliases ? `\x1b[33m📦 YOUR GLOBAL FUNCTIONS:\x1b[0m
+${hasAliases ? `\x1b[33m📦 YOUR GLOBAL ALIASES:\x1b[0m
 ${aliases.map(a => `  \x1b[32m${a.name}()\x1b[0m${' '.repeat(Math.max(1, 24 - a.name.length))}→ ${a.path}`).join('\n')}
-` : `\x1b[33m📦 NO GLOBAL FUNCTIONS YET:\x1b[0m
+` : `\x1b[33m📦 NO GLOBAL ALIASES YET:\x1b[0m
   Create your first one:
-  \x1b[90mhlvm.core.fn.set('ask', 'hlvm.stdlib.ai.ask')\x1b[0m
-  \x1b[90mhlvm.core.fn.set('read', 'hlvm.core.io.fs.read')\x1b[0m
+  \x1b[90mhlvm.core.alias.set('ask', 'hlvm.stdlib.ai.ask')\x1b[0m
+  \x1b[90mhlvm.core.alias.set('read', 'hlvm.core.io.fs.read')\x1b[0m
 `}
 \x1b[33m🎯 COMMON TASKS:\x1b[0m
   \x1b[90m// AI Chat\x1b[0m
@@ -343,9 +344,9 @@ ${aliases.map(a => `  \x1b[32m${a.name}()\x1b[0m${' '.repeat(Math.max(1, 24 - a.
   \x1b[36mhlvm.env\x1b[0m                - Environment settings
 
 \x1b[33m💡 TIPS:\x1b[0m
-  • Type \x1b[32mfn()\x1b[0m to see all your global functions
+  • Type \x1b[32malias()\x1b[0m to see all your global aliases
   • Use \x1b[32mhlvm.<TAB>\x1b[0m to explore the API
-  • Create shortcuts: \x1b[90mhlvm.core.fn.set('clip', 'hlvm.core.io.clipboard.read')\x1b[0m
+  • Create shortcuts: \x1b[90mhlvm.core.alias.set('clip', 'hlvm.core.io.clipboard.read')\x1b[0m
   • Get detailed docs: \x1b[90mhelp('hlvm.core.io.fs.read')\x1b[0m
 
 \x1b[36m═══════════════════════════════════════════════════════════════\x1b[0m
@@ -367,6 +368,9 @@ ${aliases.map(a => `  \x1b[32m${a.name}()\x1b[0m${' '.repeat(Math.max(1, 24 - a.
     console.log(`Home Dir: ${hlvmBase.core.system.homeDir()}`);
   }
   };
+  
+  // Add user storage namespace for user-defined properties (before setting null prototypes)
+  hlvmBase.core.storage.user = {};  // Will be populated after setupCustomPropertyPersistence
 
   // Ensure user-facing namespaces use null prototypes to avoid Object.prototype noise in REPL tab completion
   // Only apply to objects we construct here (skip module namespace or external objects which may be non-extensible)
@@ -385,6 +389,7 @@ ${aliases.map(a => `  \x1b[32m${a.name}()\x1b[0m${' '.repeat(Math.max(1, 24 - a.
   __setNullProto(hlvmBase.core.system);
   __setNullProto(hlvmBase.core.storage);
   __setNullProto(hlvmBase.core.storage.esm);
+  __setNullProto(hlvmBase.core.storage.user);
   __setNullProto(hlvmBase.core.io);
   __setNullProto(hlvmBase.core.io.fs);
   __setNullProto(hlvmBase.core.io.clipboard);
@@ -396,7 +401,7 @@ ${aliases.map(a => `  \x1b[32m${a.name}()\x1b[0m${' '.repeat(Math.max(1, 24 - a.
   __setNullProto(hlvmBase.core.ui.notification);
   __setNullProto(hlvmBase.core.ai);
   __setNullProto(hlvmBase.core.event);
-  __setNullProto(hlvmBase.core.fn);
+  __setNullProto(hlvmBase.core.alias);
 
   // app (avoid touching hlvmBase.app.hlvm which comes from external module)
   __setNullProto(hlvmBase.app);
@@ -440,22 +445,22 @@ ${aliases.map(a => `  \x1b[32m${a.name}()\x1b[0m${' '.repeat(Math.max(1, 24 - a.
     }
   });
   
-  // Always ensure fn() is available as a global alias
-  if (!aliases.some(a => a.name === 'fn')) {
-    // Create fn alias directly without going through createAlias to avoid circular dependency
-    globalThis.fn = (...args) => hlvmBase.core.fn.show(...args);
+  // Always ensure alias() is available as a global function
+  if (!aliases.some(a => a.name === 'alias')) {
+    // Create alias function directly without going through createAlias to avoid circular dependency
+    globalThis.alias = (...args) => hlvmBase.core.alias.show(...args);
   }
   
-  // Show available global functions in red after aliases are loaded
-  // Filter out 'fn' from the display since it's always available
-  const userAliases = aliases.filter(a => a.name !== 'fn');
+  // Show available global aliases after they are loaded
+  // Filter out 'alias' from the display since it's always available
+  const userAliases = aliases.filter(a => a.name !== 'alias');
   if (userAliases.length > 0) {
     const aliasNames = userAliases.map(a => a.name).sort().join(', ');
-    console.log(`\x1b[33mGlobal functions: ${aliasNames}\x1b[0m`);
-    console.log(`\x1b[90mType fn() to list all, help('name') for docs, or hlvm.core.fn.set() to create new\x1b[0m`);
+    console.log(`\x1b[33mGlobal aliases: ${aliasNames}\x1b[0m`);
+    console.log(`\x1b[90mType alias() to list all, help('name') for docs, or hlvm.core.alias.set() to create new\x1b[0m`);
   } else {
-    console.log(`\x1b[33mNo global functions yet.\x1b[0m \x1b[90mCreate one with hlvm.core.fn.set('name', 'path')\x1b[0m`);
-    console.log(`\x1b[90mType fn() to see examples\x1b[0m`);
+    console.log(`\x1b[33mNo global aliases yet.\x1b[0m \x1b[90mCreate one with hlvm.core.alias.set('name', 'path')\x1b[0m`);
+    console.log(`\x1b[90mType alias() to see examples\x1b[0m`);
   }
 }
 
@@ -540,56 +545,17 @@ ${aliases.map(a => `  \x1b[32m${a.name}()\x1b[0m${' '.repeat(Math.max(1, 24 - a.
   return !!alias;
 }
 
-  // Setup custom property persistence
-  function setupCustomPropertyPersistence() {
-  // Create custom_properties table if not exists
-  db.db.exec(`
-    CREATE TABLE IF NOT EXISTS custom_properties (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL,
-      type TEXT NOT NULL,
-      updated_at INTEGER NOT NULL
-    )
-  `);
-  
-  // Load existing custom properties
-  const props = db.db.prepare('SELECT * FROM custom_properties').all();
-  props.forEach(prop => {
-    try {
-      if (prop.type === 'function') {
-        // Recreate function from string
-        cleanHlvm[prop.key] = eval(`(${prop.value})`);
-      } else {
-        cleanHlvm[prop.key] = JSON.parse(prop.value);
-      }
-    } catch (e) {
-      console.error(`Failed to restore custom property '${prop.key}':`, e.message);
-    }
-  });
-}
-
-  // Save custom property to database
-  function saveCustomProperty(key, value) {
-  let serialized;
-  let type = typeof value;
-  
-  if (value === null || value === undefined) {
-    // Handle null/undefined - remove from database
-    db.db.prepare('DELETE FROM custom_properties WHERE key = ?').run(key);
-    return;
+  // Create custom properties table if not exists (moved from setupCustomPropertyPersistence)
+  function setupCustomPropertiesTable() {
+    db.db.exec(`
+      CREATE TABLE IF NOT EXISTS custom_properties (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        type TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `);
   }
-  
-  if (type === 'function') {
-    serialized = value.toString();
-  } else {
-    serialized = JSON.stringify(value);
-  }
-  
-  db.db.prepare(`
-    INSERT OR REPLACE INTO custom_properties (key, value, type, updated_at)
-    VALUES (?, ?, ?, ?)
-  `).run(key, serialized, type, Date.now());
-}
 
   // Create a clean object without Object.prototype for better tab completion
   // This prevents showing methods like valueOf, toString, etc.
@@ -602,10 +568,121 @@ ${aliases.map(a => `  \x1b[32m${a.name}()\x1b[0m${' '.repeat(Math.max(1, 24 - a.
   
   // Setup persistence (must be after cleanHlvm is created)
   setupAliases();
-  setupCustomPropertyPersistence();
+  setupCustomPropertiesTable();
 
-  // Return the clean object for TAB completion to work
-  return cleanHlvm;
+  // Wrap in Proxy for auto-persist custom properties - uses storage.user infrastructure
+  const hlvmProxy = new Proxy(cleanHlvm, {
+    set(target, prop, value) {
+      // Delegate ALL to storage.user.set - it handles system prop filtering
+      hlvmBase.core.storage.user.set(prop, value);
+      return true;
+    },
+    
+    deleteProperty(target, prop) {
+      // Delegate ALL to storage.user.remove - it handles system prop filtering  
+      hlvmBase.core.storage.user.remove(prop);
+      return true;
+    }
+  });
+
+  // Define reusable helpers for user storage (DRY)
+  const SYSTEM_PROPS = ['core', 'app', 'stdlib', 'env', 'context', 'help', 'status'];
+  
+  const isSystemProp = (key) => SYSTEM_PROPS.includes(key);
+  const isUserProp = (key) => !isSystemProp(key);
+  
+  const serializeValue = (value) => {
+    if (value === null) return { serialized: 'null', type: 'null' };
+    if (value === undefined) return { serialized: 'undefined', type: 'undefined' };
+    const type = typeof value;
+    const serialized = type === 'function' ? value.toString() : JSON.stringify(value);
+    return { serialized, type };
+  };
+  
+  const persistToDb = (key, value) => {
+    const { serialized, type } = serializeValue(value);
+    db.db.prepare(`
+      INSERT OR REPLACE INTO custom_properties (key, value, type, updated_at)
+      VALUES (?, ?, ?, ?)
+    `).run(key, serialized, type, Date.now());
+  };
+  
+  const removeFromDb = (key) => {
+    db.db.prepare('DELETE FROM custom_properties WHERE key = ?').run(key);
+  };
+  
+  // Populate the user storage methods - single source of truth for all user data persistence
+  hlvmBase.core.storage.user.set = function(key, value) {
+    // System properties - just set directly, no persistence
+    if (isSystemProp(key)) {
+      cleanHlvm[key] = value;
+      return value;
+    }
+    
+    // User properties - persist to database (including null/undefined)
+    persistToDb(key, value);
+    cleanHlvm[key] = value;
+    return value;
+  };
+  
+  hlvmBase.core.storage.user.get = function(key) {
+    return cleanHlvm[key];
+  };
+  
+  hlvmBase.core.storage.user.remove = function(key) {
+    // System properties - just delete, no database
+    if (isSystemProp(key)) {
+      delete cleanHlvm[key];
+      return true;
+    }
+    
+    // User properties - remove from database
+    if (key in cleanHlvm) {
+      removeFromDb(key);
+      delete cleanHlvm[key];
+    }
+    return true;
+  };
+  
+  hlvmBase.core.storage.user.list = function() {
+    const props = db.db.prepare('SELECT * FROM custom_properties ORDER BY key').all();
+    return props.map(p => ({
+      key: p.key,
+      type: p.type,
+      updatedAt: new Date(p.updated_at)
+    }));
+  };
+  
+  hlvmBase.core.storage.user.has = function(key) {
+    return (key in cleanHlvm) && isUserProp(key);
+  };
+  
+  // Load existing custom properties from database
+  hlvmBase.core.storage.user.load = function() {
+    const props = db.db.prepare('SELECT * FROM custom_properties').all();
+    props.forEach(prop => {
+      try {
+        if (prop.type === 'null') {
+          cleanHlvm[prop.key] = null;
+        } else if (prop.type === 'undefined') {
+          cleanHlvm[prop.key] = undefined;
+        } else if (prop.type === 'function') {
+          // Recreate function from string
+          cleanHlvm[prop.key] = eval(`(${prop.value})`);
+        } else {
+          cleanHlvm[prop.key] = JSON.parse(prop.value);
+        }
+      } catch (e) {
+        console.error(`Failed to restore custom property '${prop.key}':`, e.message);
+      }
+    });
+  };
+  
+  // Load user properties on startup
+  hlvmBase.core.storage.user.load();
+
+  // Return the proxied object for auto-persist
+  return hlvmProxy;
 })();  // End IIFE - hlvmBase is now hidden from global scope
 
 // Global utilities

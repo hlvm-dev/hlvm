@@ -1,6 +1,104 @@
 // HLVM Stdlib AI - High-level AI functions
 // Accessible as hlvm.stdlib.ai.*
 
+// Inline CLI progress UI implementation
+const HLVM_PURPLE = '\x1b[35m';  // Magenta/Purple color
+const HLVM_BRIGHT_PURPLE = '\x1b[95m';  // Bright purple
+const RESET = '\x1b[0m';
+const CLEAR_LINE = '\x1b[2K';
+const CURSOR_START = '\x1b[0G';
+const HIDE_CURSOR = '\x1b[?25l';
+const SHOW_CURSOR = '\x1b[?25h';
+const DIM = '\x1b[2m';
+const BOLD = '\x1b[1m';
+const YELLOW = '\x1b[33m';
+
+// Simple computing indicator
+function startComputing(message = 'Computing', showInterrupt = true) {
+  
+  const dots = ['', '.', '..', '...'];
+  let dotIndex = 0;
+  let interval;
+  let isFirstRender = true;
+  
+  try {
+    process.stdout.write(HIDE_CURSOR);
+  } catch (_) {}
+  
+  const render = () => {
+    const dot = dots[dotIndex];
+    let output = '';
+    
+    // On first render, add newlines to get past the Promise line
+    if (isFirstRender) {
+      output = '\n\n';
+      isFirstRender = false;
+    } else {
+      output = `${CLEAR_LINE}${CURSOR_START}`;
+    }
+    
+    // Use purple lightning bolt and purple text (no yellow!)
+    output += `${HLVM_PURPLE}⚡${RESET} ${HLVM_PURPLE}${message}${dot}${RESET}`;
+    if (showInterrupt) {
+      output += ` ${DIM}(esc to interrupt)${RESET}`;
+    }
+    try {
+      process.stdout.write(output);
+    } catch (_) {}
+    dotIndex = (dotIndex + 1) % dots.length;
+  };
+
+  render();
+  interval = setInterval(render, 500);
+
+  return {
+    update: (newMessage) => {
+      message = newMessage;
+    },
+    stop: (showDone = false) => {
+      clearInterval(interval);
+      try {
+        // Clear the entire line to remove the indicator
+        process.stdout.write(CLEAR_LINE + CURSOR_START);
+        process.stdout.write(SHOW_CURSOR);
+        if (showDone) {
+          // Put Done message on new line
+          process.stdout.write(`\n${DIM}Done. Press Enter to continue.${RESET}\n`);
+        } else {
+          // Just add spacing before response
+          process.stdout.write('\n');
+        }
+      } catch (_) {}
+    }
+  };
+}
+
+// Context usage display
+function showContextUsage(percentage, model = null) {
+  const warningThreshold = 80;
+  const criticalThreshold = 95;
+  
+  let color = HLVM_PURPLE;
+  let icon = '○';
+  
+  if (percentage >= criticalThreshold) {
+    color = '\x1b[91m'; // Bright red
+    icon = '●';
+  } else if (percentage >= warningThreshold) {
+    color = YELLOW;
+    icon = '◉';
+  }
+  
+  const message = model 
+    ? `Approaching ${model} usage limit : ${percentage}% context used`
+    : `Context usage: ${percentage}%`;
+  
+  const output = `${color}${icon} ${message}${RESET}`;
+  try {
+    process.stdout.write(`\n${output}\n`);
+  } catch (_) {}
+}
+
 // Get default model from env or fallback
 function getDefaultModel() {
   return globalThis.hlvm?.env?.get("ai.model") || globalThis.EMBEDDED_MODEL || "qwen2.5-coder:1.5b";
@@ -274,6 +372,12 @@ export async function draw(input, options = {}) {
   
   // 6. Call Ollama for diagram generation
   try {
+    // Small delay to let Promise print first
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    // Start computing indicator
+    const computing = startComputing('Drawing diagram', true);
+    
     const response = await globalThis.hlvm.core.ai.ollama.chat({
       model,
       messages: [
@@ -288,6 +392,8 @@ export async function draw(input, options = {}) {
         repeat_penalty: 1.0 // Don't penalize repeated characters (needed for diagrams)
       }
     });
+    
+    computing.stop();  // Stop computing after generation
     
     // 7. Extract and clean response
     let diagram = response.message?.content || '';
@@ -368,8 +474,11 @@ export async function revise(input, options = {}) {
   
   // 5. Call Ollama for revision with streaming
   try {
-    // Show progress indicator
-    console.log('\x1b[36m📝 Revising text...\x1b[0m');
+    // Small delay to let Promise print first
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    // Start computing indicator
+    const computing = startComputing('Revising text', true);
     
     const stream = await globalThis.hlvm.core.ai.ollama.chat({
       model,
@@ -388,6 +497,7 @@ export async function revise(input, options = {}) {
     
     // 5. Collect streaming response with visual feedback
     let revised = '';
+    computing.stop();  // Stop computing indicator before streaming
     process.stdout.write('\x1b[32m');  // Green color for revised text
     
     for await (const chunk of stream) {
@@ -484,6 +594,12 @@ export async function refactor(input, options = {}) {
   
   // 5. Call Ollama for refactoring
   try {
+    // Small delay to let Promise print first
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    // Start computing indicator
+    const computing = startComputing('Refactoring code', true);
+    
     const response = await globalThis.hlvm.core.ai.ollama.chat({
       model,
       messages: [
@@ -498,6 +614,8 @@ export async function refactor(input, options = {}) {
         repeat_penalty: 1.0 // Don't penalize repeated patterns in code
       }
     });
+    
+    computing.stop();  // Stop computing after generation
     
     // 5. Extract and clean response
     let refactored = response.message?.content || code;
@@ -535,7 +653,7 @@ export async function refactor(input, options = {}) {
 // Initialize on module load
 
 // Conversation history for ask() - in-memory only, cleared on REPL exit
-const askHistory = [];
+const chatHistory = [];
 const MAX_CONTEXT_TOKENS = 6000; // ~75% of 8192 default, leaving room for response
 
 // Simple token estimation (1 token ≈ 4 chars)
@@ -598,7 +716,7 @@ function trimHistory(messages, maxTokens = MAX_CONTEXT_TOKENS) {
  * await ask() // Ask from clipboard with context
  * // → [Answer to clipboard question]
  */
-export async function ask(input, options = {}) {
+export async function chat(input, options = {}) {
   // 1. Get question to ask
   let question = input;
   if (!question) {
@@ -619,18 +737,42 @@ export async function ask(input, options = {}) {
     messages = [{ role: 'user', content: question }];
   } else {
     // Stateful mode: add to history and manage context
-    askHistory.push({ role: 'user', content: question });
     
-    // Trim history if needed to stay within context limits
-    const currentTokens = calculateHistoryTokens(askHistory);
-    if (currentTokens > MAX_CONTEXT_TOKENS) {
-      // Keep the most recent messages that fit
-      const trimmed = trimHistory(askHistory, MAX_CONTEXT_TOKENS);
-      askHistory.length = 0;
-      askHistory.push(...trimmed);
+    // Add system prompt if not present (helps model remember context)
+    if (chatHistory.length === 0 || chatHistory[0].role !== 'system') {
+      chatHistory.unshift({ 
+        role: 'system', 
+        content: 'You are a helpful assistant. Remember and use all information from our conversation. When asked about previous topics, refer back to what was discussed earlier.'
+      });
     }
     
-    messages = askHistory;
+    chatHistory.push({ role: 'user', content: question });
+    
+    // Trim history if needed to stay within context limits
+    const currentTokens = calculateHistoryTokens(chatHistory);
+    if (currentTokens > MAX_CONTEXT_TOKENS) {
+      // Keep the most recent messages that fit
+      const trimmed = trimHistory(chatHistory, MAX_CONTEXT_TOKENS);
+      chatHistory.length = 0;
+      chatHistory.push(...trimmed);
+    }
+    
+    // Show context usage if getting high
+    const contextUsage = Math.round((currentTokens / 8192) * 100);
+    if (contextUsage > 80) {
+      showContextUsage(contextUsage, model);
+    }
+    
+    messages = chatHistory;
+  }
+  
+  // Debug: Show what we're sending (if debug option is set)
+  if (options.debug) {
+    console.log('\x1b[90m[DEBUG] Sending messages:\x1b[0m');
+    messages.forEach((msg, i) => {
+      console.log(`\x1b[90m  [${i}] ${msg.role}: ${msg.content.substring(0, 50)}...\x1b[0m`);
+    });
+    console.log(`\x1b[90m[DEBUG] Total tokens: ~${calculateHistoryTokens(messages)}\x1b[0m`);
   }
   
   // 3. Get model from options or env
@@ -644,8 +786,11 @@ export async function ask(input, options = {}) {
     const stream = options.stream !== false; // Default to streaming
     
     if (stream) {
-      // Show thinking indicator
-      console.log('\x1b[36m💭 Thinking...\x1b[0m\n');
+      // Small delay to let Promise print first
+      await new Promise(resolve => setTimeout(resolve, 10));
+      
+      // Start computing indicator
+      const computing = startComputing('Thinking', true);
       
       const response = await globalThis.hlvm.core.ai.ollama.chat({
         model,
@@ -662,6 +807,7 @@ export async function ask(input, options = {}) {
       
       // Collect streaming response with visual feedback
       let answer = '';
+      computing.stop();  // Stop computing before streaming
       process.stdout.write('\x1b[32m');  // Green color for answer
       
       for await (const chunk of response) {
@@ -677,7 +823,7 @@ export async function ask(input, options = {}) {
       
       // Add assistant response to history (unless stateless)
       if (!options.stateless) {
-        askHistory.push({ role: 'assistant', content: answer.trim() });
+        chatHistory.push({ role: 'assistant', content: answer.trim() });
       }
       
       return answer.trim();
@@ -701,7 +847,7 @@ export async function ask(input, options = {}) {
       
       // Add assistant response to history (unless stateless)
       if (!options.stateless) {
-        askHistory.push({ role: 'assistant', content: answer });
+        chatHistory.push({ role: 'assistant', content: answer });
       }
       
       return answer;
@@ -733,7 +879,7 @@ export async function ask(input, options = {}) {
  * await run("take a screenshot", {confirm: false})
  * // → Takes screenshot immediately without asking
  */
-export async function run(command, options = {}) {
+export async function ask(command, options = {}) {
   const { confirm = true } = options;
   
   if (!command || command.trim() === '') {
@@ -763,9 +909,18 @@ Examples:
 Output ONLY the command/script, nothing else.`;
 
   try {
+    // Small delay to let Promise print first
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
+    // Start computing indicator
+    const computing = startComputing('Generating script', true);
+    
     // Get model and ensure it's available
     const model = getDefaultModel();
     await ensureModel(model);
+    
+    // Update computing message
+    computing.update('Processing command');
     
     // Generate script using AI
     const response = await globalThis.hlvm.core.ai.ollama.chat({
@@ -782,6 +937,7 @@ Output ONLY the command/script, nothing else.`;
       }
     });
     
+    computing.stop();  // Stop computing after generation
     let script = response.message?.content || '';
     
     // Clean up any markdown code blocks if AI adds them
@@ -832,11 +988,53 @@ Output ONLY the command/script, nothing else.`;
         ? '\n\x1b[31mThis looks dangerous. Are you sure?\x1b[0m Execute? (y/n): '
         : '\nExecute? (y/n): ';
       
-      // Write prompt without newline for inline response
-      if (typeof Deno !== 'undefined') {
-        await Deno.stdout.write(new TextEncoder().encode(message));
+      // Write prompt
+      await Deno.stdout.write(new TextEncoder().encode(message));
+      
+      try {
+        // Check if we're in a TTY (interactive terminal)
+        const isInteractive = Deno.stdin.isTerminal();
         
-        // Read user input
+        if (isInteractive) {
+          // Set stdin to raw mode for single character input
+          Deno.stdin.setRaw(true);
+          
+          // Read single character
+          const buf = new Uint8Array(1);
+          await Deno.stdin.read(buf);
+          
+          // Immediately restore normal mode
+          Deno.stdin.setRaw(false);
+          
+          // Check the byte value directly (121 = 'y', 89 = 'Y')
+          const byteValue = buf[0];
+          const isYes = (byteValue === 121 || byteValue === 89); // 'y' or 'Y'
+          
+          // Echo the character
+          const char = String.fromCharCode(byteValue);
+          console.log(char);
+          
+          if (!isYes) {
+            console.log('\x1b[31m❌ Cancelled by user\x1b[0m');
+            return null;
+          }
+        } else {
+          // Fallback for non-TTY (piped input, etc)
+          const buf = new Uint8Array(100);
+          const n = await Deno.stdin.read(buf);
+          const answer = new TextDecoder().decode(buf.slice(0, n)).trim().toLowerCase();
+          
+          if (answer !== 'y' && answer !== 'yes') {
+            console.log('\x1b[31m❌ Cancelled by user\x1b[0m');
+            return null;
+          }
+        }
+      } catch (error) {
+        // Make sure to restore normal mode on error
+        try { Deno.stdin.setRaw(false); } catch {}
+        
+        // Fallback to line input on error
+        console.log('\nPress Enter after typing y or n:');
         const buf = new Uint8Array(100);
         const n = await Deno.stdin.read(buf);
         const answer = new TextDecoder().decode(buf.slice(0, n)).trim().toLowerCase();
@@ -901,7 +1099,7 @@ Output ONLY the command/script, nothing else.`;
 export default {
   revise,
   draw,
-  ask,
+  chat,
   refactor,
-  run
+  ask
 };

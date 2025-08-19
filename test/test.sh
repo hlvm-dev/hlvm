@@ -249,6 +249,18 @@ run_test "event.unobserve()" "hlvm.core.event.observe('hlvm.core.io.fs.read', {b
 
 echo
 echo "════════════════════════════════════════════"
+echo "STDLIB AI (5 functions)"
+echo "════════════════════════════════════════════"
+
+# Test AI functions with actual operations
+run_test "stdlib.ai.revise (type)" "console.log(typeof hlvm.stdlib.ai.revise)" "function"
+run_test "stdlib.ai.draw (type)" "console.log(typeof hlvm.stdlib.ai.draw)" "function"
+run_test "stdlib.ai.refactor (type)" "console.log(typeof hlvm.stdlib.ai.refactor)" "function"
+run_test "stdlib.ai.chat (type)" "console.log(typeof hlvm.stdlib.ai.chat)" "function"
+run_test "stdlib.ai.ask (type)" "console.log(typeof hlvm.stdlib.ai.ask)" "function"
+
+echo
+echo "════════════════════════════════════════════"
 echo "ENVIRONMENT SETTINGS (12 tests)"
 echo "════════════════════════════════════════════"
 
