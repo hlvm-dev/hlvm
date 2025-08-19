@@ -221,7 +221,7 @@ class CommandHandler {
     await import(initScriptPath);
     
     try {
-      await globalThis.hlvm.save(name, codeOrPath);
+      await globalThis.hlvm.core.storage.esm.set(name, codeOrPath);
       console.log(`✅ Saved module: ${name}`);
     } catch (error) {
       console.error(`❌ Save failed: ${error.message}`);
@@ -300,8 +300,8 @@ Options:
   --help, -h                      Show this help
   
 Description:
-  Saves JavaScript code or files to HLVM's module registry for reuse.
-  Modules can be loaded in REPL with hlvm.core.storage.modules.load(name)
+  Saves JavaScript code or files to HLVM's ESM module registry for reuse.
+  Modules can be loaded in REPL with hlvm.core.storage.esm.load(name)
   
 Examples:
   hlvm save utils ./utils.js
@@ -309,8 +309,8 @@ Examples:
   hlvm save cleanup ./scripts/cleanup.js
   
 In REPL:
-  const utils = await hlvm.core.storage.modules.load('utils')
-  hlvm.core.storage.modules.list()  // List all saved modules`);
+  const utils = await hlvm.core.storage.esm.load('utils')
+  hlvm.core.storage.esm.list()  // List all saved modules`);
     Deno.exit(0);
   }
 

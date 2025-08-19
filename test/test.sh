@@ -68,15 +68,15 @@ run_test "system.env()" "console.log(hlvm.core.system.env('HOME').startsWith('/'
 
 echo
 echo "════════════════════════════════════════════"
-echo "STORAGE MODULES (6 functions)"
+echo "STORAGE ESM (6 functions)"
 echo "════════════════════════════════════════════"
 
-run_test "modules.save()" "await hlvm.core.storage.modules.save('testmod', 'export default 42'); console.log('saved')" "saved"
-run_test "modules.load()" "const m = await hlvm.core.storage.modules.load('testmod'); console.log(m)" "42"
-run_test "modules.list()" "const l = hlvm.core.storage.modules.list(); console.log(l.some(m => m.key === 'testmod'))" "true"
-run_test "modules.has()" "console.log(await hlvm.core.storage.modules.has('testmod'))" "true"
-run_test "modules.get()" "const src = await hlvm.core.storage.modules.get('testmod'); console.log(src.includes('42'))" "true"
-run_test "modules.remove()" "await hlvm.core.storage.modules.remove('testmod'); console.log(await hlvm.core.storage.modules.has('testmod'))" "false"
+run_test "esm.set()" "await hlvm.core.storage.esm.set('testmod', 'export default 42'); console.log('saved')" "saved"
+run_test "esm.load()" "const m = await hlvm.core.storage.esm.load('testmod'); console.log(m)" "42"
+run_test "esm.list()" "const l = hlvm.core.storage.esm.list(); console.log(l.some(m => m.key === 'testmod'))" "true"
+run_test "esm.has()" "console.log(await hlvm.core.storage.esm.has('testmod'))" "true"
+run_test "esm.get()" "const src = await hlvm.core.storage.esm.get('testmod'); console.log(src.includes('42'))" "true"
+run_test "esm.remove()" "await hlvm.core.storage.esm.remove('testmod'); console.log(await hlvm.core.storage.esm.has('testmod'))" "false"
 
 echo
 echo "════════════════════════════════════════════"
@@ -246,6 +246,35 @@ echo "═══ Testing core.event (3 functions) ═══"
 run_test "event.observe()" "hlvm.core.event.observe('hlvm.core.io.fs.write', {before: () => {}}); console.log(hlvm.core.event.list().length)" "1"
 run_test "event.list()" "console.log(Array.isArray(hlvm.core.event.list()))" "true"
 run_test "event.unobserve()" "hlvm.core.event.observe('hlvm.core.io.fs.read', {before: () => {}}); hlvm.core.event.unobserve('hlvm.core.io.fs.read'); console.log(hlvm.core.event.list().filter(o => o.path === 'hlvm.core.io.fs.read').length)" "0"
+
+echo
+echo "════════════════════════════════════════════"
+echo "ENVIRONMENT SETTINGS (12 tests)"
+echo "════════════════════════════════════════════"
+
+# Test basic CRUD operations
+run_test "env.set() valid number" "console.log(hlvm.env.set('ai.temperature', 1.2))" "1.2"
+run_test "env.get() returns set value" "console.log(hlvm.env.get('ai.temperature'))" "1.2"
+run_test "env.has() detects custom" "console.log(hlvm.env.has('ai.temperature'))" "true"
+
+# Test validation - invalid values should be rejected
+run_test "env.set() invalid string" "const v = hlvm.env.set('ai.temperature', 'hot'); console.log(v)" "1.2"  # Should keep current
+run_test "env.set() out of range" "const v = hlvm.env.set('ai.temperature', 5); console.log(v)" "1.2"  # Should keep current
+run_test "env.set() unknown key" "const v = hlvm.env.set('fake.key', 'value'); console.log(v)" "undefined"
+
+# Test get with unknown key
+run_test "env.get() unknown key" "console.log(hlvm.env.get('fake.key'))" "undefined"
+
+# Test list returns all settings
+run_test "env.list() has all keys" "const e = hlvm.env.list(); console.log(Object.keys(e).length)" "4"  # Should have 4 settings
+run_test "env.list() shows defaults" "const e = hlvm.env.list(); console.log(e['ai.model'])" "qwen2.5-coder:1.5b"
+
+# Test reset functionality  
+run_test "env.reset() single key" "hlvm.env.reset('ai.temperature'); console.log(hlvm.env.get('ai.temperature'))" "0.7"  # Back to default
+run_test "env.has() after reset" "console.log(hlvm.env.has('ai.temperature'))" "false"
+
+# Test show is a function
+run_test "env.show (type)" "console.log(typeof hlvm.env.show)" "function"
 
 echo "╔════════════════════════════════════════════╗"
 echo "║           TEST RESULTS                   ║"

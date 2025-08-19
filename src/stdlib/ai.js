@@ -18,26 +18,6 @@ function reprintReplPrompt() {
   }
 }
 
-// Pretty-print the invoked command with colors
-function echoAskPreview(question) {
-  try {
-    const colors = {
-      purple: '\x1b[38;5;91m',
-      blue: '\x1b[38;5;75m',
-      red: '\x1b[38;5;196m',
-      gray: '\x1b[38;5;240m',
-      reset: '\x1b[0m'
-    };
-    const maxLen = 140;
-    let text = String(question ?? '').replace(/"/g, '\\"');
-    if (text.length > maxLen) text = text.slice(0, maxLen - 1) + '…';
-    const preview = `${colors.purple}ask${colors.reset}(${colors.red}"${text}"${colors.reset})`;
-    console.log(preview);
-  } catch (_) {
-    // ignore coloring errors
-  }
-}
-
 // Model manager state
 let modelChecked = false;
 let modelAvailable = false;
@@ -596,8 +576,6 @@ export async function ask(input, options = {}) {
     const stream = options.stream !== false; // Default to streaming
     
     if (stream) {
-      // Show the colored preview of the call
-      echoAskPreview(question);
       // Show thinking indicator
       console.log('\x1b[36m💭 Thinking...\x1b[0m\n');
       

@@ -82,8 +82,11 @@ globalThis.hlvm = (() => {
           load: db.load,
           getSource: db.getSource
         }),
-        modules: {
-          save: db.save,
+        // ESM modules collection (renamed from modules for clarity)
+        esm: {
+          set: db.save,  // Renamed from save for consistency
+          get: db.getSource,
+          list: db.list,
           remove: async (name) => {
             // If no name given, remove ALL modules (nuke)
             if (!name) {
@@ -97,13 +100,11 @@ globalThis.hlvm = (() => {
             // Otherwise remove specific module
             return db.remove(name);
           },
-          list: db.list,
-          load: db.load,
-          get: db.getSource,
           has: async (name) => {
             const modules = db.list();
             return modules.some(m => m.key === name);
-          }
+          },
+          load: db.load  // Keep load as it executes the module
         }
       },
       
@@ -185,7 +186,68 @@ globalThis.hlvm = (() => {
         get: (name) => getAlias(name),
         list: () => listAliases(),
         remove: async (name) => removeAlias(name),
-        has: (name) => hasAlias(name)
+        has: (name) => hasAlias(name),
+        // Show all aliases in a nice format
+        show: function(filter) {
+          const aliases = listAliases();
+          
+          // If filter provided, filter by name or path
+          let filtered = aliases;
+          if (filter) {
+            const lowerFilter = filter.toLowerCase();
+            filtered = aliases.filter(a => 
+              a.name.toLowerCase().includes(lowerFilter) || 
+              a.path.toLowerCase().includes(lowerFilter)
+            );
+          }
+          
+          if (filtered.length === 0) {
+            if (filter) {
+              console.log(`\x1b[33mNo global functions matching '${filter}'\x1b[0m`);
+            } else {
+              console.log(`\x1b[33mNo global functions registered yet.\x1b[0m`);
+              console.log(`\x1b[90mCreate one with: hlvm.core.fn.set('name', 'path.to.function')\x1b[0m`);
+              console.log(`\x1b[90mExample: hlvm.core.fn.set('ask', 'hlvm.stdlib.ai.ask')\x1b[0m`);
+            }
+            return [];
+          }
+          
+          // Display in a nice format
+          console.log(`\n\x1b[36m═══ Global Functions${filter ? ` (filtered: ${filter})` : ''} ═══\x1b[0m\n`);
+          
+          // Group by category if possible
+          const categorized = {};
+          filtered.forEach(alias => {
+            // Try to categorize by path prefix
+            let category = 'Custom';
+            if (alias.path.includes('.ai.')) category = 'AI';
+            else if (alias.path.includes('.fs.')) category = 'File System';
+            else if (alias.path.includes('.clipboard.')) category = 'Clipboard';
+            else if (alias.path.includes('.system.')) category = 'System';
+            else if (alias.path.includes('.computer.')) category = 'Automation';
+            else if (alias.path.includes('.notification.')) category = 'UI';
+            
+            if (!categorized[category]) categorized[category] = [];
+            categorized[category].push(alias);
+          });
+          
+          // Display categorized
+          Object.keys(categorized).sort().forEach(category => {
+            console.log(`\x1b[33m${category}:\x1b[0m`);
+            categorized[category].sort((a, b) => a.name.localeCompare(b.name)).forEach(alias => {
+              const padding = ' '.repeat(Math.max(1, 20 - alias.name.length));
+              console.log(`  \x1b[32m${alias.name}()\x1b[0m${padding}→ \x1b[90m${alias.path}\x1b[0m`);
+            });
+            console.log();
+          });
+          
+          console.log(`\x1b[90mTotal: ${filtered.length} function${filtered.length !== 1 ? 's' : ''}\x1b[0m`);
+          if (filtered.length > 0) {
+            console.log(`\x1b[90mUse help('${filtered[0].name}') or help(${filtered[0].name}) for documentation\x1b[0m\n`);
+          }
+          
+          return filtered;
+        }
       }
     },
     
@@ -222,81 +284,62 @@ globalThis.hlvm = (() => {
   
   // Help
   help: () => {
+    // Get current aliases for display
+    const aliases = listAliases();
+    const hasAliases = aliases.length > 0;
+    
     console.log(`
-HLVM - High-Level Virtual Machine
-==================================
+\x1b[36m═══════════════════════════════════════════════════════════════\x1b[0m
+\x1b[36m                    HLVM QUICK START GUIDE\x1b[0m
+\x1b[36m═══════════════════════════════════════════════════════════════\x1b[0m
 
-STRUCTURE:
-  hlvm.core.*               - Core primitives (building blocks)
-  hlvm.app.*                - App control (GUI functions)
-  hlvm.stdlib.*             - High-level functions (coming soon)
-
-CORE MODULES:
-  hlvm.core.system          - OS/environment (exec, env, paths)
-  hlvm.core.storage         - Persistence (db, modules)
-  hlvm.core.io              - Input/Output (fs, clipboard)
-  hlvm.core.computer        - Automation (keyboard, mouse, screen)
-  hlvm.core.ui              - User interface (notifications)
-  hlvm.core.ai              - AI services (ollama)
-  hlvm.core.event           - Observation system (observe, unobserve)
-
-STORAGE & MODULES:
-  hlvm.core.storage.modules.save()    - Save module
-  hlvm.core.storage.modules.remove()  - Remove module(s)
-  hlvm.core.storage.modules.list()    - List modules
-  hlvm.core.storage.modules.load()    - Load module
-
-FILE OPERATIONS:
-  hlvm.core.io.fs.read(path)          - Read text file
-  hlvm.core.io.fs.write(path, text)   - Write text file
-  hlvm.core.io.fs.exists(path)        - Check if path exists
-  hlvm.core.io.fs.remove(path)        - Delete file/directory
-  hlvm.core.io.fs.mkdir(path)         - Create directory
-  hlvm.core.io.fs.copy(src, dest)     - Copy file/directory
-  hlvm.core.io.fs.move(src, dest)     - Move file/directory
-
-COMPUTER AUTOMATION:
-  hlvm.core.computer.keyboard.type()  - Type text
-  hlvm.core.computer.keyboard.press() - Press keys (array format: ["cmd", "s"])
-  hlvm.core.computer.mouse.click()    - Click mouse
-  hlvm.core.computer.mouse.move()     - Move mouse
-  hlvm.core.computer.screen.capture() - Capture screen
-
-AI SERVICES:
-  hlvm.core.ai.ollama.list()          - List models
-  hlvm.core.ai.ollama.chat()          - Chat with AI
-
-APP CONTROL:
-  hlvm.app.spotlight                  - Spotlight UI
-  hlvm.app.chat                       - Chat UI
-  hlvm.app.playground                 - Code playground
-
-Examples:
-  // Files
+\x1b[33m🚀 DISCOVERY COMMANDS:\x1b[0m
+  \x1b[32mfn()\x1b[0m                     - List all global functions you can use
+  \x1b[32mhelp('name')\x1b[0m             - Get help for specific function (e.g., help('ask'))
+  \x1b[32mhelp(functionName)\x1b[0m       - Get help for function object (e.g., help(ask))
+  
+${hasAliases ? `\x1b[33m📦 YOUR GLOBAL FUNCTIONS:\x1b[0m
+${aliases.map(a => `  \x1b[32m${a.name}()\x1b[0m${' '.repeat(Math.max(1, 24 - a.name.length))}→ ${a.path}`).join('\n')}
+` : `\x1b[33m📦 NO GLOBAL FUNCTIONS YET:\x1b[0m
+  Create your first one:
+  \x1b[90mhlvm.core.fn.set('ask', 'hlvm.stdlib.ai.ask')\x1b[0m
+  \x1b[90mhlvm.core.fn.set('read', 'hlvm.core.io.fs.read')\x1b[0m
+`}
+\x1b[33m🎯 COMMON TASKS:\x1b[0m
+  \x1b[90m// AI Chat\x1b[0m
+  await hlvm.stdlib.ai.ask("What is quantum computing?")
+  
+  \x1b[90m// Text Revision\x1b[0m
+  await hlvm.stdlib.ai.revise("fix this text plz")
+  
+  \x1b[90m// File Operations\x1b[0m
   await hlvm.core.io.fs.write('/tmp/test.txt', 'Hello')
-  const text = await hlvm.core.io.fs.read('/tmp/test.txt')
+  await hlvm.core.io.fs.read('/tmp/test.txt')
   
-  // Notifications
-  await hlvm.core.ui.notification.notify("Done!", "HLVM")
-  const name = await hlvm.core.ui.notification.prompt("Name?")
-  
-  // Automation
-  await hlvm.core.computer.screen.capture("/tmp/screen.png")
-  await hlvm.core.computer.keyboard.type("Hello")
-  await hlvm.core.computer.mouse.click(100, 100)
-  
-  // AI
-  const response = await hlvm.core.ai.ollama.chat({ 
-    model: 'llama3', 
-    prompt: 'Hello' 
-  }
+  \x1b[90m// Clipboard\x1b[0m
+  await hlvm.core.io.clipboard.write("text")
+  await hlvm.core.io.clipboard.read()
+
+\x1b[33m📚 MAIN NAMESPACES:\x1b[0m
+  \x1b[36mhlvm.core\x1b[0m               - Core system functions
+  \x1b[36mhlvm.stdlib\x1b[0m             - High-level utilities
+  \x1b[36mhlvm.app\x1b[0m                - Application control
+  \x1b[36mhlvm.env\x1b[0m                - Environment settings
+
+\x1b[33m💡 TIPS:\x1b[0m
+  • Type \x1b[32mfn()\x1b[0m to see all your global functions
+  • Use \x1b[32mhlvm.<TAB>\x1b[0m to explore the API
+  • Create shortcuts: \x1b[90mhlvm.core.fn.set('clip', 'hlvm.core.io.clipboard.read')\x1b[0m
+  • Get detailed docs: \x1b[90mhelp('hlvm.core.io.fs.read')\x1b[0m
+
+\x1b[36m═══════════════════════════════════════════════════════════════\x1b[0m
     `);
   },
   
   // Status
   status: () => {
     const modules = Object.keys(hlvm).filter(k => typeof hlvm[k] === 'object');
-    const savedModules = hlvmBase.core.storage.modules.list();
+    const savedModules = hlvmBase.core.storage.esm.list();
     
     console.log('\nHLVM Status:');
     console.log('─'.repeat(40));
@@ -325,7 +368,7 @@ Examples:
   __setNullProto(hlvmBase.core);
   __setNullProto(hlvmBase.core.system);
   __setNullProto(hlvmBase.core.storage);
-  __setNullProto(hlvmBase.core.storage.modules);
+  __setNullProto(hlvmBase.core.storage.esm);
   __setNullProto(hlvmBase.core.io);
   __setNullProto(hlvmBase.core.io.fs);
   __setNullProto(hlvmBase.core.io.clipboard);
@@ -380,6 +423,24 @@ Examples:
       console.error(`Failed to restore alias '${alias.name}':`, e.message);
     }
   });
+  
+  // Always ensure fn() is available as a global alias
+  if (!aliases.some(a => a.name === 'fn')) {
+    // Create fn alias directly without going through createAlias to avoid circular dependency
+    globalThis.fn = (...args) => hlvmBase.core.fn.show(...args);
+  }
+  
+  // Show available global functions in red after aliases are loaded
+  // Filter out 'fn' from the display since it's always available
+  const userAliases = aliases.filter(a => a.name !== 'fn');
+  if (userAliases.length > 0) {
+    const aliasNames = userAliases.map(a => a.name).sort().join(', ');
+    console.log(`\x1b[31mGlobal functions: ${aliasNames}\x1b[0m`);
+    console.log(`\x1b[90mType fn() to list all, help('name') for docs, or hlvm.core.fn.set() to create new\x1b[0m`);
+  } else {
+    console.log(`\x1b[31mNo global functions yet.\x1b[0m \x1b[90mCreate one with hlvm.core.fn.set('name', 'path')\x1b[0m`);
+    console.log(`\x1b[90mType fn() to see examples\x1b[0m`);
+  }
 }
 
   // Create an alias

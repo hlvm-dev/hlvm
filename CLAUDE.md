@@ -182,8 +182,9 @@ Current public APIs that need documentation:
 - CLI commands: `hlvm`, `hlvm save`, `hlvm revise`, `hlvm deno *`, `hlvm ollama *`
 - JavaScript APIs: `hlvm.*` namespace (core, app, stdlib, env)
   - Core: system, storage, io, computer, ui, ai, event, fn
+    - storage.esm: ESM module management (set, get, list, remove, has, load)
+    - fn: Global function aliases (set, get, list, remove, has)
   - Stdlib: ai (ask, revise, draw, refactor)
-  - Function aliases: `hlvm.core.fn.*` for global function management
 - WebSocket Bridge API (port 11436, JSON-RPC)
 
 Documentation should follow the style of https://github.com/ollama/ollama/blob/main/docs/api.md
