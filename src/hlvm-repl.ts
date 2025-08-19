@@ -517,8 +517,8 @@ class REPLManager {
     ].join('\n');
   
     console.log(`\n${boxed}\n`);
-    Deno.env.set("DENO_REPL_PROMPT", `${colors.purple}λ ${colors.reset}`);
-    console.log("HLVM ready. Type 'hlvm.help()' for help.");
+    Deno.env.set("DENO_REPL_PROMPT", "> ");
+    console.log("HLVM ready. Type 'help()' for general help or 'help(function)' for docs.");
   }
   
 

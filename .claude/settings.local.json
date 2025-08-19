@@ -137,7 +137,8 @@
       "Bash(/tmp/test-clean-tree.js)",
       "Bash(/tmp/test-doc-debug.js)",
       "Bash(/tmp/cleanup-doc-properties.sh:*)",
-      "Bash(/tmp/test-jsdoc.js)"
+      "Bash(/tmp/test-jsdoc.js)",
+      "Bash(./resources/deno repl:*)"
     ],
     "deny": [],
     "ask": [],

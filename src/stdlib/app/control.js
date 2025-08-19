@@ -273,22 +273,44 @@ public class Win32 {
 
   /**
    * Launch application and wait for it to be ready
+   * @param {string} appName - Application name
+   * @param {string} [url] - Optional URL to open (for browsers)
    */
-  async launchApp(appName) {
+  async launchApp(appName, url = null) {
     this._init();
     
     // Check if already running
     const wasRunning = await this.isAppRunning(appName);
     
     if (this.isDarwin) {
-      const script = `tell application "${appName}" to launch`;
-      await this.runAppleScript(script);
+      if (url) {
+        // For browsers with URLs, use AppleScript to ensure URL opens
+        // This works whether the app is running or not
+        const script = `
+          tell application "${appName}"
+            activate
+            open location "${url}"
+          end tell
+        `;
+        await this.runAppleScript(script);
+      } else {
+        const script = `tell application "${appName}" to launch`;
+        await this.runAppleScript(script);
+      }
     }
     else if (this.isWindows) {
-      await this.executeCommand(`start "" "${appName}"`);
+      if (url) {
+        await this.executeCommand(`start "" "${appName}" "${url}"`);
+      } else {
+        await this.executeCommand(`start "" "${appName}"`);
+      }
     }
     else if (this.isLinux) {
-      await this.executeCommand(`${appName} &`);
+      if (url) {
+        await this.executeCommand(`${appName} "${url}" &`);
+      } else {
+        await this.executeCommand(`${appName} &`);
+      }
     }
     
     // If app wasn't running, wait for it to be ready
@@ -580,9 +602,10 @@ export async function get(identifier) {
     
     /**
      * Launch the application
+     * @param {string} [url] - Optional URL to open (for browsers)
      */
-    async launch() {
-      return await platform.launchApp(appName);
+    async launch(url = null) {
+      return await platform.launchApp(appName, url);
     },
     
     /**
@@ -661,10 +684,26 @@ export async function get(identifier) {
     },
     
     /**
-     * Open app with callback or promise chain
-     * @param {Function} [callback] - Optional callback when ready
+     * Open app with optional URL or callback
+     * @param {string|Function} [urlOrCallback] - URL to open (for browsers) or callback function
      */
-    async open(callback) {
+    async open(urlOrCallback) {
+      // Handle URL string (for browsers and URL-capable apps)
+      if (typeof urlOrCallback === 'string') {
+        const url = urlOrCallback;
+        const launched = await this.launch(url);
+        await this.activate();
+        
+        // If just launched, ensure it's ready
+        if (launched) {
+          await platform.waitForApp(appName);
+        }
+        
+        return this; // Allow chaining
+      }
+      
+      // Handle callback function (original behavior)
+      const callback = urlOrCallback;
       const launched = await this.launch();
       await this.activate();
       

@@ -103,19 +103,7 @@ globalThis.hlvm = (() => {
           has: async (name) => {
             const modules = db.list();
             return modules.some(m => m.key === name);
-          },
-          
-          // Alias management - permanent global aliases
-          alias: async (name, path) => {
-            // Remove alias if path is null
-            if (path === null || path === undefined) {
-              return removeAlias(name);
-            }
-            return createAlias(name, path);
-          },
-          aliases: () => listAliases(),
-          removeAlias: (name) => removeAlias(name),
-          updateAlias: (name, path) => createAlias(name, path)
+          }
         }
       },
       
@@ -189,6 +177,15 @@ globalThis.hlvm = (() => {
         observe: event.observe,
         unobserve: event.unobserve,
         list: event.list
+      },
+      
+      // Function aliases - global function management
+      fn: {
+        set: async (name, path) => createAlias(name, path),
+        get: (name) => getAlias(name),
+        list: () => listAliases(),
+        remove: async (name) => removeAlias(name),
+        has: (name) => hasAlias(name)
       }
     },
     
@@ -312,6 +309,39 @@ Examples:
   }
   };
 
+  // Ensure user-facing namespaces use null prototypes to avoid Object.prototype noise in REPL tab completion
+  // Only apply to objects we construct here (skip module namespace or external objects which may be non-extensible)
+  const __setNullProto = (obj) => {
+    if (obj && typeof obj === 'object') {
+      try { Object.setPrototypeOf(obj, null); } catch (_) { /* ignore */ }
+    }
+  };
+
+  // stdlib
+  __setNullProto(hlvmBase.stdlib);
+  __setNullProto(hlvmBase.stdlib.ai);
+
+  // core namespaces
+  __setNullProto(hlvmBase.core);
+  __setNullProto(hlvmBase.core.system);
+  __setNullProto(hlvmBase.core.storage);
+  __setNullProto(hlvmBase.core.storage.modules);
+  __setNullProto(hlvmBase.core.io);
+  __setNullProto(hlvmBase.core.io.fs);
+  __setNullProto(hlvmBase.core.io.clipboard);
+  __setNullProto(hlvmBase.core.computer);
+  __setNullProto(hlvmBase.core.computer.keyboard);
+  __setNullProto(hlvmBase.core.computer.mouse);
+  __setNullProto(hlvmBase.core.computer.screen);
+  __setNullProto(hlvmBase.core.ui);
+  __setNullProto(hlvmBase.core.ui.notification);
+  __setNullProto(hlvmBase.core.ai);
+  __setNullProto(hlvmBase.core.event);
+  __setNullProto(hlvmBase.core.fn);
+
+  // app (avoid touching hlvmBase.app.hlvm which comes from external module)
+  __setNullProto(hlvmBase.app);
+
   // Setup alias persistence
   function setupAliases() {
     // Create aliases table if not exists
@@ -404,6 +434,18 @@ Examples:
   return true;
 }
 
+  // Get a specific alias
+  function getAlias(name) {
+  const alias = db.db.prepare('SELECT * FROM aliases WHERE name = ?').get(name);
+  if (!alias) return null;
+  return {
+    name: alias.name,
+    path: alias.path,
+    createdAt: new Date(alias.created_at),
+    updatedAt: new Date(alias.updated_at)
+  };
+}
+
   // List all aliases
   function listAliases() {
   const aliases = db.db.prepare('SELECT * FROM aliases ORDER BY name').all();
@@ -413,6 +455,12 @@ Examples:
     createdAt: new Date(s.created_at),
     updatedAt: new Date(s.updated_at)
   }));
+}
+
+  // Check if alias exists
+  function hasAlias(name) {
+  const alias = db.db.prepare('SELECT 1 FROM aliases WHERE name = ?').get(name);
+  return !!alias;
 }
 
   // Setup custom property persistence
@@ -486,52 +534,20 @@ Examples:
 // Global utilities
 globalThis.pprint = (obj) => console.log(JSON.stringify(obj, null, 2));
 
-// Global functions for custom property persistence
-globalThis.hlvmSet = function(prop, value) {
-  const systemProps = ['core', 'app', 'stdlib', 'env', 'context', 'help', 'status'];
-  
-  if (systemProps.includes(prop)) {
-    console.error(`Cannot override system property: hlvm.${prop}`);
-    return false;
+// Global help function - shows general help or specific function documentation
+globalThis.help = function(func) {
+  // If no argument, show general HLVM help
+  if (arguments.length === 0) {
+    // Call hlvm.help() for general help
+    if (globalThis.hlvm && globalThis.hlvm.help) {
+      globalThis.hlvm.help();
+    } else {
+      console.log('HLVM help not available');
+    }
+    return;
   }
   
-  // Save to database for persistence
-  let serialized;
-  let type = typeof value;
-  
-  if (value === null || value === undefined) {
-    // Handle null/undefined - remove from database
-    globalThis.hlvm.core.storage.db.prepare('DELETE FROM custom_properties WHERE key = ?').run(prop);
-    delete globalThis.hlvm[prop];
-    return true;
-  }
-  
-  if (type === 'function') {
-    serialized = value.toString();
-  } else {
-    serialized = JSON.stringify(value);
-  }
-  
-  globalThis.hlvm.core.storage.db.prepare(`
-    INSERT OR REPLACE INTO custom_properties (key, value, type, updated_at)
-    VALUES (?, ?, ?, ?)
-  `).run(prop, serialized, type, Date.now());
-  
-  // Set the value on hlvm
-  globalThis.hlvm[prop] = value;
-  return true;
-};
-
-globalThis.hlvmDelete = function(prop) {
-  // Remove from database
-  globalThis.hlvm.core.storage.db.prepare('DELETE FROM custom_properties WHERE key = ?').run(prop);
-  // Remove from hlvm object
-  delete globalThis.hlvm[prop];
-  return true;
-};
-
-// Helper to display function documentation
-globalThis.doc = function(func) {
+  // Otherwise show documentation for specific function
   let path = '';
   
   // Handle string path like 'hlvm.core.io.fs.read'
@@ -562,7 +578,36 @@ globalThis.doc = function(func) {
   
   // Handle direct function - find its path
   if (typeof func === 'function') {
-    // Try to find the path for this function
+    // First check if this is a global alias
+    // Look for the function in global scope
+    let aliasName = null;
+    for (const key in globalThis) {
+      if (globalThis[key] === func && key !== 'doc' && key !== 'pprint') {
+        aliasName = key;
+        break;
+      }
+    }
+    
+    // If we found an alias, check the aliases table for its path
+    if (aliasName && globalThis.hlvm?.core?.storage?.db) {
+      try {
+        const aliasInfo = globalThis.hlvm.core.storage.db
+          .prepare('SELECT path FROM aliases WHERE name = ?')
+          .get(aliasName);
+        if (aliasInfo && aliasInfo.path) {
+          path = aliasInfo.path;
+          // Look up documentation with this path
+          if (docRegistry.has(path)) {
+            console.log(docRegistry.get(path));
+            return;
+          }
+        }
+      } catch (e) {
+        // Database query failed, continue with normal lookup
+      }
+    }
+    
+    // Try to find the path for this function in hlvm namespace
     function findPath(obj, target, currentPath = '') {
       for (const key in obj) {
         const newPath = currentPath ? `${currentPath}.${key}` : key;
@@ -583,7 +628,7 @@ globalThis.doc = function(func) {
       console.log(docRegistry.get(path));
     } else {
       // No documentation found
-      const funcName = func.name || 'anonymous';
+      const funcName = func.name || aliasName || 'anonymous';
       console.log(`\x1b[36m${funcName}(...)\x1b[0m`);
       console.log('\nNo documentation available');
     }
@@ -596,7 +641,7 @@ globalThis.doc = function(func) {
       console.log(`  ${key}: \x1b[90m${type}\x1b[0m`);
     }
   } else {
-    console.log('Usage: doc(function) or doc("path.to.function")');
+    console.log('Usage: help(function) or help("path.to.function")');
   }
 };
 
