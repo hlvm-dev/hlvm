@@ -217,6 +217,133 @@ class PathUtils {
   }
 }
 
+// Initialize documentation for REPL display
+function initializeDocs() {
+  // File operations docs
+  FileOps.read.__doc__ = `\x1b[36mread(path)\x1b[0m
+
+Reads text content from a file
+
+\x1b[33mParameters:\x1b[0m
+  path: \x1b[90mstring\x1b[0m - File path to read
+
+\x1b[33mReturns:\x1b[0m Promise<string> - File content as text
+
+\x1b[33mExample:\x1b[0m
+  await read('/tmp/test.txt')
+  \x1b[32m// → "Hello World"\x1b[0m`;
+  FileOps.read[Symbol.for('Deno.customInspect')] = function() { return FileOps.read.__doc__; };
+
+  FileOps.write.__doc__ = `\x1b[36mwrite(path, content)\x1b[0m
+
+Writes text content to a file
+
+\x1b[33mParameters:\x1b[0m
+  path: \x1b[90mstring\x1b[0m - File path to write
+  content: \x1b[90mstring\x1b[0m - Text content to write
+
+\x1b[33mReturns:\x1b[0m Promise<void>
+
+\x1b[33mExample:\x1b[0m
+  await write('/tmp/test.txt', 'Hello World')
+  \x1b[32m// → File created with content\x1b[0m`;
+  FileOps.write[Symbol.for('Deno.customInspect')] = function() { return FileOps.write.__doc__; };
+
+  FileOps.exists.__doc__ = `\x1b[36mexists(path)\x1b[0m
+
+Checks if a file or directory exists
+
+\x1b[33mParameters:\x1b[0m
+  path: \x1b[90mstring\x1b[0m - Path to check
+
+\x1b[33mReturns:\x1b[0m Promise<boolean>
+
+\x1b[33mExample:\x1b[0m
+  await exists('/tmp/test.txt')
+  \x1b[32m// → true\x1b[0m`;
+  FileOps.exists[Symbol.for('Deno.customInspect')] = function() { return FileOps.exists.__doc__; };
+
+  // Directory operations docs
+  DirOps.mkdir.__doc__ = `\x1b[36mmkdir(path, options?)\x1b[0m
+
+Creates a directory
+
+\x1b[33mParameters:\x1b[0m
+  path: \x1b[90mstring\x1b[0m - Directory path to create
+  options: \x1b[90mObject\x1b[0m (optional) - {recursive: true}
+
+\x1b[33mReturns:\x1b[0m Promise<void>
+
+\x1b[33mExample:\x1b[0m
+  await mkdir('/tmp/test/deep/path')
+  \x1b[32m// → Creates all directories in path\x1b[0m`;
+  DirOps.mkdir[Symbol.for('Deno.customInspect')] = function() { return DirOps.mkdir.__doc__; };
+
+  DirOps.remove.__doc__ = `\x1b[36mremove(path, options?)\x1b[0m
+
+Removes a file or directory
+
+\x1b[33mParameters:\x1b[0m
+  path: \x1b[90mstring\x1b[0m - Path to remove
+  options: \x1b[90mObject\x1b[0m (optional) - {recursive: true}
+
+\x1b[33mReturns:\x1b[0m Promise<void>
+
+\x1b[33mExample:\x1b[0m
+  await remove('/tmp/test')
+  \x1b[32m// → Removes test and all contents\x1b[0m`;
+  DirOps.remove[Symbol.for('Deno.customInspect')] = function() { return DirOps.remove.__doc__; };
+
+  DirOps.copy.__doc__ = `\x1b[36mcopy(src, dest)\x1b[0m
+
+Copies files or directories recursively
+
+\x1b[33mParameters:\x1b[0m
+  src: \x1b[90mstring\x1b[0m - Source path
+  dest: \x1b[90mstring\x1b[0m - Destination path
+
+\x1b[33mReturns:\x1b[0m Promise<void>
+
+\x1b[33mExample:\x1b[0m
+  await copy('/tmp/source', '/tmp/backup')
+  \x1b[32m// → Creates backup with all contents\x1b[0m`;
+  DirOps.copy[Symbol.for('Deno.customInspect')] = function() { return DirOps.copy.__doc__; };
+
+  DirOps.move.__doc__ = `\x1b[36mmove(src, dest)\x1b[0m
+
+Moves or renames files and directories
+
+\x1b[33mParameters:\x1b[0m
+  src: \x1b[90mstring\x1b[0m - Source path
+  dest: \x1b[90mstring\x1b[0m - Destination path
+
+\x1b[33mReturns:\x1b[0m Promise<void>
+
+\x1b[33mExample:\x1b[0m
+  await move('/tmp/old.txt', '/tmp/new.txt')
+  \x1b[32m// → Renames old.txt to new.txt\x1b[0m`;
+  DirOps.move[Symbol.for('Deno.customInspect')] = function() { return DirOps.move.__doc__; };
+
+  // Path utilities docs
+  PathUtils.join.__doc__ = `\x1b[36mjoin(...paths)\x1b[0m
+
+Joins path segments using platform separator
+
+\x1b[33mParameters:\x1b[0m
+  ...paths: \x1b[90mstring[]\x1b[0m - Path segments to join
+
+\x1b[33mReturns:\x1b[0m string - Joined path
+
+\x1b[33mExample:\x1b[0m
+  join('/tmp', 'test', 'file.txt')
+  \x1b[32m// → '/tmp/test/file.txt' (Unix)
+  // → '\\tmp\\test\\file.txt' (Windows)\x1b[0m`;
+  PathUtils.join[Symbol.for('Deno.customInspect')] = function() { return PathUtils.join.__doc__; };
+}
+
+// Initialize docs on module load
+initializeDocs();
+
 // Export public API (maintain backward compatibility)
 export const read = FileOps.read;
 export const write = FileOps.write;

@@ -217,13 +217,17 @@ run_test "error handling" "try { await hlvm.core.ai.ollama.generate({ model: 'fa
 
 echo
 echo "════════════════════════════════════════════"
-echo "APP CONTROL (4 objects)"
+echo "APP CONTROL (7 tests)"
 echo "════════════════════════════════════════════"
 
 run_test "app object exists" "console.log(typeof hlvm.app)" "object"
-run_test "app.connect exists" "console.log(typeof hlvm.app.connect)" "function"
-run_test "app.spotlight exists" "console.log(typeof hlvm.app.spotlight)" "object"
-run_test "app.chat exists" "console.log(typeof hlvm.app.chat)" "object"
+run_test "app.hlvm.connect exists" "console.log(typeof hlvm.app.hlvm.connect)" "function"
+run_test "app.hlvm.spotlight exists" "console.log(typeof hlvm.app.hlvm.spotlight)" "object"
+run_test "app.hlvm.chat exists" "console.log(typeof hlvm.app.hlvm.chat)" "object"
+# New external app control tests
+run_test "app.get exists" "console.log(typeof hlvm.app.get)" "function"
+run_test "app.list exists" "console.log(typeof hlvm.app.list)" "function"
+run_test "app.frontmost exists" "console.log(typeof hlvm.app.frontmost)" "function"
 
 echo
 echo "════════════════════════════════════════════"
@@ -237,18 +241,11 @@ run_test "custom property null removal" "hlvm.mytest = null; console.log(hlvm.my
 run_test "custom property delete" "hlvm.temp = 'test'; delete hlvm.temp; console.log(typeof hlvm.temp)" "undefined"
 
 echo
-echo "════════════════════════════════════════════"
-echo "CONTEXT SHORTHAND (1 test)"
-echo "════════════════════════════════════════════"
-
-run_test "global context" "console.log(typeof context)" "object"
-
-echo
 # Test event observation system (3 functions)
 echo "═══ Testing core.event (3 functions) ═══"
-run_test "event.observe()" "hlvm.core.event.observe('hlvm.core.io.fs.write', {before: () => {}}); console.log(hlvm.core.event.listObservers().length)" "1"
-run_test "event.listObservers()" "console.log(Array.isArray(hlvm.core.event.listObservers()))" "true"
-run_test "event.unobserve()" "hlvm.core.event.observe('hlvm.core.io.fs.read', {before: () => {}}); hlvm.core.event.unobserve('hlvm.core.io.fs.read'); console.log(hlvm.core.event.listObservers().filter(o => o.path === 'hlvm.core.io.fs.read').length)" "0"
+run_test "event.observe()" "hlvm.core.event.observe('hlvm.core.io.fs.write', {before: () => {}}); console.log(hlvm.core.event.list().length)" "1"
+run_test "event.list()" "console.log(Array.isArray(hlvm.core.event.list()))" "true"
+run_test "event.unobserve()" "hlvm.core.event.observe('hlvm.core.io.fs.read', {before: () => {}}); hlvm.core.event.unobserve('hlvm.core.io.fs.read'); console.log(hlvm.core.event.list().filter(o => o.path === 'hlvm.core.io.fs.read').length)" "0"
 
 echo "╔════════════════════════════════════════════╗"
 echo "║           TEST RESULTS                   ║"

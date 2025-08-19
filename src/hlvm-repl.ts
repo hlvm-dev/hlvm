@@ -87,7 +87,7 @@ class EnvironmentSetup {
 
   private static async createDirectoryStructure(stdlibPath: string): Promise<void> {
     await Deno.mkdir(stdlibPath, { recursive: true });
-    const subdirs = ['core', 'fs', 'io', 'computer', 'ai', 'ui'];
+    const subdirs = ['core', 'fs', 'io', 'computer', 'ai', 'ui', 'app'];
     
     for (const dir of subdirs) {
       await Deno.mkdir(`${stdlibPath}${Config.pathSep}${dir}`, { recursive: true });

@@ -6,13 +6,30 @@ const observers = new Map();
 const fileWatchers = new Map();
 
 /**
- * Smart observe function that detects target type and observes accordingly
+ * Observe function calls, property changes, or file modifications
  * @param {string} target - Path to observe (hlvm.*, file path, or pattern)
  * @param {Object} hooks - Observation hooks
  * @param {Function} [hooks.before] - Called before function execution
- * @param {Function} [hooks.after] - Called after function execution
+ * @param {Function} [hooks.after] - Called after function execution  
  * @param {Function} [hooks.error] - Called on function error
  * @param {Function} [hooks.onChange] - Called on property/file change
+ * @returns {boolean} True if observer was added successfully
+ * @example
+ * // Observe function calls
+ * hlvm.core.event.observe('hlvm.core.io.fs.write', {
+ *   before: (args) => console.log('Writing:', args[0]),
+ *   after: (result) => console.log('Wrote successfully')
+ * })
+ * @example
+ * // Observe file changes
+ * hlvm.core.event.observe('/tmp/watch.txt', {
+ *   onChange: (event) => console.log('File changed:', event.kind)
+ * })
+ * @example  
+ * // Observe pattern (all fs functions)
+ * hlvm.core.event.observe('hlvm.core.io.fs.*', {
+ *   before: (args, path) => console.log(`Calling ${path}:`, args)
+ * })
  */
 export function observe(target, hooks) {
   if (typeof target !== 'string') {
@@ -36,11 +53,36 @@ export function observe(target, hooks) {
 }
 
 /**
- * Stop observing a target
- * @param {string} target - Path to stop observing
+ * Stop observing a target or all targets
+ * @param {string} [target] - Path to stop observing. If omitted, removes ALL observers
+ * @returns {number|boolean} Count of removed observers (if no target) or success boolean
+ * @example
+ * // Remove specific observer
+ * hlvm.core.event.unobserve('hlvm.core.io.fs.write')
+ * @example
+ * // Remove all observers
+ * const count = hlvm.core.event.unobserve()
+ * console.log(`Removed ${count} observers`)
  */
 export function unobserve(target) {
-  // Remove function/property observer
+  // If no target, remove ALL observers
+  if (target === undefined) {
+    let count = 0;
+    
+    // Remove all function/property observers
+    for (const [path] of observers) {
+      if (unobserve(path)) count++;
+    }
+    
+    // Remove all file watchers
+    for (const [path] of fileWatchers) {
+      if (unobserve(path)) count++;
+    }
+    
+    return count;
+  }
+  
+  // Remove specific observer
   if (observers.has(target)) {
     const observer = observers.get(target);
     
@@ -277,82 +319,120 @@ function observeProperty(obj, propName, path, hooks) {
   return true;
 }
 
-// Export a function to list all active observers
-export function listObservers() {
-  const list = [];
-  let id = 1;
+/**
+ * List all active observers
+ * @returns {Array<{path: string, type: string, hooks: string[]}>} Array of observer info
+ * @example
+ * const observers = hlvm.core.event.list()
+ * observers.forEach(o => console.log(`${o.path} (${o.type}): ${o.hooks.join(', ')}`)) 
+ */
+export function list() {
+  const result = [];
   
   // Add function/property observers
   for (const [path, observer] of observers) {
-    list.push({
-      id: id++,
+    result.push({
       path: path,
       type: observer.type,
-      hooks: Object.keys(observer.hooks),
-      enabled: observer.enabled !== false
+      hooks: Object.keys(observer.hooks)
     });
   }
   
   // Add file watchers
   for (const [path] of fileWatchers) {
-    list.push({
-      id: id++,
+    result.push({
       path: path,
       type: 'file',
-      hooks: ['onChange'],
-      enabled: true
+      hooks: ['onChange']
     });
   }
   
-  return list;
+  return result;
 }
 
-// Remove ALL observers
-export function unobserveAll() {
-  const list = listObservers();
-  let count = 0;
+// Setup self-documentation
+function initializeDocs() {
+  const inspectSymbol = Symbol.for('Deno.customInspect');
   
-  // Remove all function/property observers
-  for (const [path] of observers) {
-    unobserve(path);
-    count++;
-  }
+  // Documentation for observe
+  observe.__doc__ = `\x1b[36mobserve(target, hooks)\x1b[0m
+
+Observe function calls, property changes, or file modifications
+
+\x1b[33mParameters:\x1b[0m
+  target: \x1b[90mstring\x1b[0m - Path to observe (hlvm.*, file path, or pattern)
+  hooks: \x1b[90mObject\x1b[0m - Observation hooks
+    before: Called before function execution
+    after: Called after function execution
+    error: Called on function error
+    onChange: Called on property/file change
+
+\x1b[33mReturns:\x1b[0m boolean - True if observer was added
+
+\x1b[33mExamples:\x1b[0m
+  // Observe function calls
+  observe('hlvm.core.io.fs.write', {
+    before: (args) => console.log('Writing:', args[0])
+  })
   
-  // Remove all file watchers
-  for (const [path] of fileWatchers) {
-    unobserve(path);
-    count++;
-  }
+  // Observe file changes
+  observe('/tmp/watch.txt', {
+    onChange: (event) => console.log('Changed:', event.kind)
+  })
   
-  return count;
+  // Observe pattern (all fs functions)
+  observe('hlvm.core.io.fs.*', {
+    before: (args, path) => console.log(\`Calling \${path}\`)
+  })`;
+  
+  observe[inspectSymbol] = function() {
+    return observe.__doc__;
+  };
+  
+  // Documentation for unobserve
+  unobserve.__doc__ = `\x1b[36munobserve(target?)\x1b[0m
+
+Stop observing a target or all targets
+
+\x1b[33mParameters:\x1b[0m
+  target: \x1b[90mstring\x1b[0m (optional) - Path to stop observing
+          If omitted, removes ALL observers
+
+\x1b[33mReturns:\x1b[0m number|boolean - Count if no target, else success
+
+\x1b[33mExamples:\x1b[0m
+  // Remove specific observer
+  unobserve('hlvm.core.io.fs.write')
+  
+  // Remove all observers
+  const count = unobserve()
+  console.log(\`Removed \${count} observers\`)`;
+  
+  unobserve[inspectSymbol] = function() {
+    return unobserve.__doc__;
+  };
+  
+  // Documentation for list
+  list.__doc__ = `\x1b[36mlist()\x1b[0m
+
+List all active observers
+
+\x1b[33mReturns:\x1b[0m Array<Object> - Observer information
+  Each object contains:
+    path: The observed path
+    type: 'function'|'property'|'file'
+    hooks: Array of hook names
+
+\x1b[33mExample:\x1b[0m
+  const observers = list()
+  observers.forEach(o => {
+    console.log(\`\${o.path} (\${o.type}): \${o.hooks.join(', ')}\`)
+  })`;
+  
+  list[inspectSymbol] = function() {
+    return list.__doc__;
+  };
 }
 
-// Get formatted observer list for display
-export function showObservers() {
-  const list = listObservers();
-  
-  if (list.length === 0) {
-    console.log('No active observers');
-    return;
-  }
-  
-  // Calculate column widths
-  const maxPath = Math.max(25, ...list.map(o => o.path.length));
-  
-  // Header
-  console.log('┌────┬' + '─'.repeat(maxPath + 2) + '┬──────────┬─────────────────┬─────────┐');
-  console.log('│ ID │ ' + 'Path'.padEnd(maxPath) + ' │ Type     │ Hooks           │ Status  │');
-  console.log('├────┼' + '─'.repeat(maxPath + 2) + '┼──────────┼─────────────────┼─────────┤');
-  
-  // Rows
-  list.forEach(o => {
-    const path = o.path.length > maxPath ? o.path.substring(0, maxPath - 3) + '...' : o.path;
-    const hooks = o.hooks.join(', ').substring(0, 15);
-    const status = o.enabled ? '✓' : '✗';
-    console.log(`│ ${String(o.id).padEnd(2)} │ ${path.padEnd(maxPath)} │ ${o.type.padEnd(8)} │ ${hooks.padEnd(15)} │ ${status.padEnd(7)} │`);
-  });
-  
-  // Footer
-  console.log('└────┴' + '─'.repeat(maxPath + 2) + '┴──────────┴─────────────────┴─────────┘');
-  console.log(`${list.length} active observer${list.length !== 1 ? 's' : ''}`);
-}
+// Initialize documentation on module load
+initializeDocs();

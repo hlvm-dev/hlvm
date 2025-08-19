@@ -17,6 +17,7 @@ import * as keyboard from "./stdlib/computer/keyboard.js";
 import * as mouse from "./stdlib/computer/mouse.js";
 import * as ollama from "./stdlib/ai/ollama.js";
 import ui from "./stdlib/ui/control.js";
+import appControl from "./stdlib/app/control.js";
 import { context as computerContext } from "./stdlib/computer/context.js";
 
 // Import stdlib AI module
@@ -184,12 +185,22 @@ globalThis.hlvm = (() => {
       event: {
         observe: event.observe,
         unobserve: event.unobserve,
-        listObservers: event.listObservers
+        list: event.list
       }
     },
     
     // LAYER 2: App control (top-level, not core!)
-    app: ui,
+    app: {
+      // HLVM's own UI controls (WebSocket bridge, etc.)
+      hlvm: ui,
+      
+      // External app control (cross-platform)
+      get: appControl.get,
+      list: appControl.list,
+      frontmost: appControl.frontmost,
+      aliases: appControl.aliases,
+      isAvailable: appControl.isAvailable
+    },
     
     // LAYER 3: High-level stdlib
     stdlib: {
