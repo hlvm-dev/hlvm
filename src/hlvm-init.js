@@ -246,6 +246,22 @@ globalThis.hlvm = (() => {
             console.log(`\x1b[90mUse help('${filtered[0].name}') or help(${filtered[0].name}) for documentation\x1b[0m\n`);
           }
           
+          // Show documentation for each function
+          console.log(`\x1b[36m═══ Documentation ═══\x1b[0m\n`);
+          
+          filtered.forEach(alias => {
+            // Check if documentation exists for this path
+            if (docRegistry.has(alias.path)) {
+              console.log(docRegistry.get(alias.path));
+              console.log(); // Add spacing between docs
+            } else {
+              // Show basic info if no documentation
+              console.log(`\x1b[36m${alias.name}()\x1b[0m`);
+              console.log(`Path: ${alias.path}`);
+              console.log(`\x1b[90mNo detailed documentation available\x1b[0m\n`);
+            }
+          });
+          
           return filtered;
         }
       }
@@ -435,10 +451,10 @@ ${aliases.map(a => `  \x1b[32m${a.name}()\x1b[0m${' '.repeat(Math.max(1, 24 - a.
   const userAliases = aliases.filter(a => a.name !== 'fn');
   if (userAliases.length > 0) {
     const aliasNames = userAliases.map(a => a.name).sort().join(', ');
-    console.log(`\x1b[31mGlobal functions: ${aliasNames}\x1b[0m`);
+    console.log(`\x1b[33mGlobal functions: ${aliasNames}\x1b[0m`);
     console.log(`\x1b[90mType fn() to list all, help('name') for docs, or hlvm.core.fn.set() to create new\x1b[0m`);
   } else {
-    console.log(`\x1b[31mNo global functions yet.\x1b[0m \x1b[90mCreate one with hlvm.core.fn.set('name', 'path')\x1b[0m`);
+    console.log(`\x1b[33mNo global functions yet.\x1b[0m \x1b[90mCreate one with hlvm.core.fn.set('name', 'path')\x1b[0m`);
     console.log(`\x1b[90mType fn() to see examples\x1b[0m`);
   }
 }

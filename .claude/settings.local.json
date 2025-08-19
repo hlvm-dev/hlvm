@@ -138,7 +138,8 @@
       "Bash(/tmp/test-doc-debug.js)",
       "Bash(/tmp/cleanup-doc-properties.sh:*)",
       "Bash(/tmp/test-jsdoc.js)",
-      "Bash(./resources/deno repl:*)"
+      "Bash(./resources/deno repl:*)",
+      "Bash(/tmp/demo-ai-run.js)"
     ],
     "deny": [],
     "ask": [],

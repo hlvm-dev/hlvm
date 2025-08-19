@@ -534,22 +534,68 @@ export async function refactor(input, options = {}) {
 
 // Initialize on module load
 
+// Conversation history for ask() - in-memory only, cleared on REPL exit
+const askHistory = [];
+const MAX_CONTEXT_TOKENS = 6000; // ~75% of 8192 default, leaving room for response
+
+// Simple token estimation (1 token ≈ 4 chars)
+function estimateTokens(text) {
+  return Math.ceil(text.length / 4);
+}
+
+// Calculate total tokens in message history
+function calculateHistoryTokens(messages) {
+  return messages.reduce((total, msg) => {
+    return total + estimateTokens(msg.content || '');
+  }, 0);
+}
+
+// Smart trim: Keep recent messages under token limit
+function trimHistory(messages, maxTokens = MAX_CONTEXT_TOKENS) {
+  if (messages.length === 0) return messages;
+  
+  // Always try to keep at least the last exchange
+  const minKeep = Math.min(2, messages.length);
+  
+  // Start from the end and work backwards to keep most recent
+  let trimmed = [];
+  let tokenCount = 0;
+  
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msgTokens = estimateTokens(messages[i].content || '');
+    
+    // Keep recent messages within token limit
+    if (trimmed.length < minKeep || tokenCount + msgTokens <= maxTokens) {
+      trimmed.unshift(messages[i]);
+      tokenCount += msgTokens;
+    } else {
+      // We've hit our limit
+      break;
+    }
+  }
+  
+  return trimmed;
+}
+
 /**
- * Simple chat with AI - ask any question and get an answer
+ * Simple chat with AI - ask any question and get an answer (maintains conversation context)
  * @param {string} input - Question to ask (uses clipboard if empty)
  * @param {Object} [options] - Chat options
  * @param {string} [options.model] - Model to use (defaults to env setting)
  * @param {boolean} [options.stream=true] - Stream the response
  * @param {number} [options.temperature] - Response creativity (0-2, default 0.7)
+ * @param {boolean} [options.stateless=false] - Skip conversation history (one-off question)
  * @returns {Promise<string>} AI response
  * @example
  * await ask("What is the capital of France?")
  * // → "The capital of France is Paris."
+ * await ask("What about Germany?") // Remembers context
+ * // → "The capital of Germany is Berlin."
  * @example
- * await ask("Explain quantum computing in simple terms")
- * // → [Detailed explanation...]
+ * await ask("Quick question", {stateless: true}) // No context
+ * // → [Answer without affecting conversation history]
  * @example
- * await ask() // Ask from clipboard
+ * await ask() // Ask from clipboard with context
  * // → [Answer to clipboard question]
  */
 export async function ask(input, options = {}) {
@@ -565,13 +611,35 @@ export async function ask(input, options = {}) {
     throw new Error('No question to ask (input is empty and clipboard is empty)');
   }
   
-  // 2. Get model from options or env
+  // 2. Prepare messages based on stateless option
+  let messages;
+  
+  if (options.stateless) {
+    // Stateless mode: just send the current question
+    messages = [{ role: 'user', content: question }];
+  } else {
+    // Stateful mode: add to history and manage context
+    askHistory.push({ role: 'user', content: question });
+    
+    // Trim history if needed to stay within context limits
+    const currentTokens = calculateHistoryTokens(askHistory);
+    if (currentTokens > MAX_CONTEXT_TOKENS) {
+      // Keep the most recent messages that fit
+      const trimmed = trimHistory(askHistory, MAX_CONTEXT_TOKENS);
+      askHistory.length = 0;
+      askHistory.push(...trimmed);
+    }
+    
+    messages = askHistory;
+  }
+  
+  // 3. Get model from options or env
   let model = options.model || globalThis.hlvm?.env?.get("ai.model") || getDefaultModel();
   
-  // 3. Ensure model is available (auto-download if needed)
+  // 4. Ensure model is available (auto-download if needed)
   await ensureModel(model);
   
-  // 4. Call Ollama for chat
+  // 5. Call Ollama with appropriate messages
   try {
     const stream = options.stream !== false; // Default to streaming
     
@@ -581,13 +649,12 @@ export async function ask(input, options = {}) {
       
       const response = await globalThis.hlvm.core.ai.ollama.chat({
         model,
-        messages: [
-          { role: 'user', content: question }
-        ],
+        messages,
         stream: true,
         options: {
           temperature: options.temperature || globalThis.hlvm?.env?.get("ai.temperature") || 0.7,
           num_predict: globalThis.hlvm?.env?.get("ai.max_tokens") || 2000,
+          num_ctx: 8192, // Explicitly set context window
           top_p: 0.95,
           repeat_penalty: 1.1
         }
@@ -607,25 +674,37 @@ export async function ask(input, options = {}) {
       process.stdout.write('\x1b[0m\n');  // Reset color and newline
       // Ensure the REPL prompt is visible again after streaming ends
       reprintReplPrompt();
+      
+      // Add assistant response to history (unless stateless)
+      if (!options.stateless) {
+        askHistory.push({ role: 'assistant', content: answer.trim() });
+      }
+      
       return answer.trim();
       
     } else {
       // Non-streaming mode (for programmatic use)
       const response = await globalThis.hlvm.core.ai.ollama.chat({
         model,
-        messages: [
-          { role: 'user', content: question }
-        ],
+        messages,
         stream: false,
         options: {
           temperature: options.temperature || globalThis.hlvm?.env?.get("ai.temperature") || 0.7,
           num_predict: globalThis.hlvm?.env?.get("ai.max_tokens") || 2000,
+          num_ctx: 8192, // Explicitly set context window
           top_p: 0.95,
           repeat_penalty: 1.1
         }
       });
       
-      return response.message?.content || '';
+      const answer = response.message?.content || '';
+      
+      // Add assistant response to history (unless stateless)
+      if (!options.stateless) {
+        askHistory.push({ role: 'assistant', content: answer });
+      }
+      
+      return answer;
     }
     
   } catch (error) {
@@ -641,9 +720,188 @@ export async function ask(input, options = {}) {
   }
 }
 
+/**
+ * Execute natural language commands by generating and running scripts
+ * @param {string} command - Natural language command to execute
+ * @param {Object} [options] - Execution options
+ * @param {boolean} [options.confirm=true] - Ask for confirmation before executing
+ * @returns {Promise<any>} Execution result or null if cancelled
+ * @example
+ * await run("open facebook")
+ * // → Shows script, asks confirmation, opens Facebook
+ * @example
+ * await run("take a screenshot", {confirm: false})
+ * // → Takes screenshot immediately without asking
+ */
+export async function run(command, options = {}) {
+  const { confirm = true } = options;
+  
+  if (!command || command.trim() === '') {
+    throw new Error('No command provided');
+  }
+  
+  // Build prompt for AI to generate executable script
+  const platform = globalThis.hlvm.core.system.os;
+  const prompt = `Generate a minimal executable script to: "${command}"
+Platform: ${platform}
+
+Rules:
+1. Return ONLY the executable code - no comments, no explanations
+2. Use the simplest approach:
+   - Shell commands for system operations (open, ls, echo, etc.)
+   - AppleScript ONLY for app-specific control on macOS
+   - Deno/TypeScript ONLY for complex file/network operations
+3. Make it as short as possible
+
+Examples:
+"open facebook" → open https://facebook.com
+"list files" → ls -la
+"show current directory" → pwd
+"take screenshot" → screencapture -x ~/Desktop/screenshot.png
+"play spotify" → tell application "Spotify" to play
+
+Output ONLY the command/script, nothing else.`;
+
+  try {
+    // Get model and ensure it's available
+    const model = getDefaultModel();
+    await ensureModel(model);
+    
+    // Generate script using AI
+    const response = await globalThis.hlvm.core.ai.ollama.chat({
+      model,
+      messages: [
+        { role: 'system', content: prompt },
+        { role: 'user', content: command }
+      ],
+      stream: false,
+      options: {
+        temperature: 0.3,  // Low temperature for consistent script generation
+        num_predict: 500,  // Short scripts only
+        top_p: 0.9
+      }
+    });
+    
+    let script = response.message?.content || '';
+    
+    // Clean up any markdown code blocks if AI adds them
+    script = script
+      .replace(/^```[\w]*\n?/gm, '')
+      .replace(/\n?```$/gm, '')
+      .trim();
+    
+    if (!script) {
+      console.error('❌ Failed to generate script');
+      return null;
+    }
+    
+    // Detect dangerous commands
+    const dangerousPatterns = [
+      /rm\s+-rf\s+\/(?:\s|$)/,  // rm -rf /
+      /sudo\s+rm/,                // sudo rm
+      />\s*\/dev\/sda/,          // Writing to disk devices
+      /format\s+c:/i,            // Windows format
+      /del\s+\/s\s+\/q\s+c:/i    // Windows delete
+    ];
+    
+    const isDangerous = dangerousPatterns.some(pattern => pattern.test(script));
+    
+    // Show script preview with nice formatting
+    console.log('\n\x1b[36m📋 Will execute:\x1b[0m');
+    console.log('\x1b[90m' + '─'.repeat(50) + '\x1b[0m');
+    
+    // Syntax highlight based on script type
+    if (script.includes('tell application') || script.includes('osascript')) {
+      console.log('\x1b[35m' + script + '\x1b[0m');  // Magenta for AppleScript
+    } else if (script.includes('Deno.') || script.includes('await') || script.includes('import')) {
+      console.log('\x1b[33m' + script + '\x1b[0m');  // Yellow for TypeScript
+    } else {
+      console.log('\x1b[32m' + script + '\x1b[0m');  // Green for shell
+    }
+    
+    console.log('\x1b[90m' + '─'.repeat(50) + '\x1b[0m');
+    
+    // Warn if dangerous
+    if (isDangerous) {
+      console.log('\n\x1b[31m⚠️  WARNING: Potentially dangerous operation detected!\x1b[0m');
+    }
+    
+    // Confirmation prompt
+    if (confirm) {
+      const message = isDangerous 
+        ? '\n\x1b[31mThis looks dangerous. Are you sure?\x1b[0m Execute? (y/n): '
+        : '\nExecute? (y/n): ';
+      
+      // Write prompt without newline for inline response
+      if (typeof Deno !== 'undefined') {
+        await Deno.stdout.write(new TextEncoder().encode(message));
+        
+        // Read user input
+        const buf = new Uint8Array(100);
+        const n = await Deno.stdin.read(buf);
+        const answer = new TextDecoder().decode(buf.slice(0, n)).trim().toLowerCase();
+        
+        if (answer !== 'y' && answer !== 'yes') {
+          console.log('\x1b[31m❌ Cancelled by user\x1b[0m');
+          return null;
+        }
+      }
+    }
+    
+    // Execute based on script type
+    let result;
+    
+    if (script.includes('tell application') || script.includes('osascript')) {
+      // AppleScript - write to file and execute
+      const scriptPath = '/tmp/hlvm-do.scpt';
+      await globalThis.hlvm.core.io.fs.write(scriptPath, script);
+      result = await globalThis.hlvm.core.system.exec(['osascript', scriptPath]);
+      
+    } else if (script.includes('Deno.') || script.includes('await') || script.includes('import') || script.includes('fetch') || script.includes('const ') || script.includes('let ')) {
+      // Deno/TypeScript - write to file and run with deno
+      const scriptPath = '/tmp/hlvm-do.ts';
+      await globalThis.hlvm.core.io.fs.write(scriptPath, script);
+      result = await globalThis.hlvm.core.system.exec(['deno', 'run', '--allow-all', scriptPath]);
+      
+    } else {
+      // Shell script - write to file, make executable, and run
+      const scriptPath = '/tmp/hlvm-do.sh';
+      await globalThis.hlvm.core.io.fs.write(scriptPath, script);
+      await globalThis.hlvm.core.system.exec(['chmod', '+x', scriptPath]);
+      result = await globalThis.hlvm.core.system.exec([scriptPath]);
+    }
+    
+    // Show result
+    if (result && result.stdout) {
+      console.log(result.stdout);
+    }
+    
+    if (result && result.code === 0) {
+      console.log('\x1b[32m✅ Executed successfully\x1b[0m');
+    } else if (result && result.code !== 0) {
+      console.log(`\x1b[31m❌ Execution failed with code ${result.code}\x1b[0m`);
+      if (result.stderr) {
+        console.error('\x1b[31m' + result.stderr + '\x1b[0m');
+      }
+    }
+    
+    return result;
+    
+  } catch (error) {
+    console.error('\x1b[31m❌ Error:', error.message, '\x1b[0m');
+    
+    if (error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED')) {
+      console.error('Ollama service is not running. Start it with: hlvm ollama serve');
+    }
+    
+    return null;
+  }
+}
+
 export default {
   revise,
   draw,
   ask,
-  refactor
+  refactor,
+  run
 };
