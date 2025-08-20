@@ -158,7 +158,11 @@
       "WebFetch(domain:planethatch.com)",
       "Bash(/tmp/test-yn-in-repl.sh:*)",
       "Bash(/tmp/test-ask-final.sh)",
-      "Bash(/tmp/test-cli-permission.sh:*)"
+      "Bash(/tmp/test-cli-permission.sh:*)",
+      "WebFetch(domain:workdrive.zohoexternal.com)",
+      "WebFetch(domain:hlvm.dev)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:jangseoksoon.org)"
     ],
     "deny": [],
     "ask": [],

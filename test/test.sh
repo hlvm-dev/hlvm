@@ -249,22 +249,54 @@ run_test "event.unobserve()" "hlvm.core.event.observe('hlvm.core.io.fs.read', {b
 
 echo
 echo "════════════════════════════════════════════"
-echo "STDLIB AI (10 functions)"
+echo "STDLIB AI - Behavior Tests (30 tests)"
 echo "════════════════════════════════════════════"
 
-# Test AI functions - type checks first
-run_test "stdlib.ai.revise (type)" "console.log(typeof hlvm.stdlib.ai.revise)" "function"
-run_test "stdlib.ai.draw (type)" "console.log(typeof hlvm.stdlib.ai.draw)" "function"
-run_test "stdlib.ai.refactor (type)" "console.log(typeof hlvm.stdlib.ai.refactor)" "function"
-run_test "stdlib.ai.chat (type)" "console.log(typeof hlvm.stdlib.ai.chat)" "function"
-run_test "stdlib.ai.ask (type)" "console.log(typeof hlvm.stdlib.ai.ask)" "function"
+# Type checks
+run_test "ai.revise (type)" "console.log(typeof hlvm.stdlib.ai.revise)" "function"
+run_test "ai.draw (type)" "console.log(typeof hlvm.stdlib.ai.draw)" "function"
+run_test "ai.refactor (type)" "console.log(typeof hlvm.stdlib.ai.refactor)" "function"
+run_test "ai.chat (type)" "console.log(typeof hlvm.stdlib.ai.chat)" "function"
+run_test "ai.ask (type)" "console.log(typeof hlvm.stdlib.ai.ask)" "function"
+run_test "ai.judge (type)" "console.log(typeof hlvm.stdlib.ai.judge)" "function"
 
-# Test AI functions with actual operations (lightweight tests)
-run_test "stdlib.ai.revise() works" "const r = await hlvm.stdlib.ai.revise('test text', {tone: 'default'}); console.log(typeof r)" "string"
-run_test "stdlib.ai.draw() works" "const r = await hlvm.stdlib.ai.draw('A->B->C', {type: 'flowchart'}); console.log(typeof r)" "string"
-run_test "stdlib.ai.refactor() works" "const r = await hlvm.stdlib.ai.refactor('function f(){return 1}', {type: 'clean'}); console.log(typeof r)" "string"
-run_test "stdlib.ai.chat() works" "const r = await hlvm.stdlib.ai.chat('Hi', {stateless: true, stream: false}); console.log(typeof r)" "string"
-run_test "stdlib.ai.ask() skipped" "console.log('ask requires TTY')" "ask requires TTY"
+# JUDGE - Behavior tests
+run_test "judge returns boolean" "const r = await hlvm.stdlib.ai.judge('test statement'); console.log(typeof r)" "boolean"
+run_test "judge handles empty input" "try { await hlvm.stdlib.ai.judge(''); } catch(e) { console.log(e.message) }" "No statement to judge"
+run_test "judge handles null input" "try { await hlvm.stdlib.ai.judge(null); } catch(e) { console.log(e.message) }" "No statement to judge"
+
+# REVISE - Behavior tests  
+run_test "revise returns string" "const r = await hlvm.stdlib.ai.revise('test text'); console.log(typeof r)" "string"
+run_test "revise accepts tone option" "const r = await hlvm.stdlib.ai.revise('test', {tone: 'professional'}); console.log(typeof r)" "string"
+run_test "revise validates tone" "try { await hlvm.stdlib.ai.revise('test', {tone: 'invalid'}); } catch(e) { console.log('invalid tone') }" "invalid tone"
+run_test "revise handles empty input" "try { await hlvm.stdlib.ai.revise(''); } catch(e) { console.log(e.message) }" "No text to revise"
+
+# DRAW - Behavior tests
+run_test "draw returns string" "const r = await hlvm.stdlib.ai.draw('A->B'); console.log(typeof r)" "string"
+run_test "draw accepts type option" "const r = await hlvm.stdlib.ai.draw('test', {type: 'flowchart'}); console.log(typeof r)" "string"
+run_test "draw validates type" "try { await hlvm.stdlib.ai.draw('test', {type: 'invalid'}); } catch(e) { console.log('invalid type') }" "invalid type"
+run_test "draw handles empty input" "try { await hlvm.stdlib.ai.draw(''); } catch(e) { console.log(e.message) }" "No text to visualize"
+
+# REFACTOR - Behavior tests
+run_test "refactor returns string" "const r = await hlvm.stdlib.ai.refactor('function f(){}'); console.log(typeof r)" "string"
+run_test "refactor accepts type option" "const r = await hlvm.stdlib.ai.refactor('code', {type: 'dry'}); console.log(typeof r)" "string"
+run_test "refactor validates type" "try { await hlvm.stdlib.ai.refactor('code', {type: 'invalid'}); } catch(e) { console.log('invalid type') }" "invalid type"
+run_test "refactor handles empty input" "try { await hlvm.stdlib.ai.refactor(''); } catch(e) { console.log(e.message) }" "No code to refactor"
+
+# CHAT - Behavior tests
+run_test "chat returns string" "const r = await hlvm.stdlib.ai.chat('Hi', {stateless: true, stream: false}); console.log(typeof r)" "string"
+run_test "chat stateless mode" "const r = await hlvm.stdlib.ai.chat('test', {stateless: true, stream: false}); console.log(typeof r)" "string"
+run_test "chat handles empty input" "try { await hlvm.stdlib.ai.chat('', {stream: false}); } catch(e) { console.log(e.message) }" "No question to ask"
+
+# ASK - Special handling (requires TTY)
+run_test "ask requires TTY" "console.log('ask requires TTY')" "ask requires TTY"
+
+# Clipboard fallback tests (when input is null/undefined)
+run_test "judge uses clipboard fallback" "await hlvm.core.io.clipboard.write('test'); const r = await hlvm.stdlib.ai.judge(); console.log(typeof r)" "boolean"
+run_test "revise uses clipboard fallback" "await hlvm.core.io.clipboard.write('text'); const r = await hlvm.stdlib.ai.revise(); console.log(typeof r)" "string"
+run_test "draw uses clipboard fallback" "await hlvm.core.io.clipboard.write('A->B'); const r = await hlvm.stdlib.ai.draw(); console.log(typeof r)" "string"
+run_test "refactor uses clipboard fallback" "await hlvm.core.io.clipboard.write('code'); const r = await hlvm.stdlib.ai.refactor(); console.log(typeof r)" "string"
+run_test "chat uses clipboard fallback" "await hlvm.core.io.clipboard.write('Hi'); const r = await hlvm.stdlib.ai.chat(null, {stateless: true, stream: false}); console.log(typeof r)" "string"
 
 echo
 echo "════════════════════════════════════════════"

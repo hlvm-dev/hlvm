@@ -287,7 +287,8 @@ globalThis.hlvm = (() => {
         draw: stdlibAI.draw,
         refactor: stdlibAI.refactor,
         chat: stdlibAI.chat,
-        ask: stdlibAI.ask
+        ask: stdlibAI.ask,
+        judge: stdlibAI.judge
       }
     },
     
