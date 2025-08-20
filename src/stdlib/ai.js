@@ -17,7 +17,7 @@ function startComputing(message = 'Computing') {
   let i = 0, interval, first = true;
   try { process.stdout.write(HIDE_CURSOR); } catch {}
   const render = () => {
-    const prefix = first ? '\n\n' : (CLEAR_LINE + CURSOR_START);
+    const prefix = first ? '\n' : (CLEAR_LINE + CURSOR_START);  // Only one \n, not two
     first = false;
     try {
       process.stdout.write(`${prefix}  ${HLVM_PURPLE}${frames[i]}${RESET}  ${message}...`);
@@ -443,23 +443,47 @@ async function readSingleKeyRaw(tty, opts = { echo: false }) {
 }
 
 async function confirmSingleKeyTTY(message = "Execute? (y/n): ") {
-  return await withTTY(async (tty) => {
-    if (!tty) {
-      console.log("⚠️  Non-interactive environment detected — auto-proceeding");
+  // Check if we're in REPL environment
+  const inREPL = globalThis.Deno?.isatty?.(0) && !globalThis.hlvm?.env?.get?.("HLVM_NON_INTERACTIVE");
+  
+  if (inREPL) {
+    // In REPL, use simple stdin reading with prompt display
+    try {
+      const encoder = new TextEncoder();
+      const decoder = new TextDecoder();
+      
+      // Show the prompt
+      await Deno.stdout.write(encoder.encode(`\n${message}`));
+      
+      // Read user input (requires Enter key)
+      const buffer = new Uint8Array(100);
+      const n = await Deno.stdin.read(buffer);
+      
+      if (n) {
+        const input = decoder.decode(buffer.subarray(0, n)).trim().toLowerCase();
+        if (input === 'y' || input === 'yes') {
+          console.log("✓ Proceeding...");
+          return true;
+        } else if (input === 'n' || input === 'no') {
+          console.log("✗ Cancelled");
+          return false;
+        } else {
+          console.log("Invalid response. Treating as 'no'.");
+          return false;
+        }
+      }
+      return false;
+    } catch (e) {
+      logAsk("REPL prompt failed:", e.message);
+      // Fallback to auto-proceed
+      console.log("⚠️  Could not read response — auto-proceeding");
       return true;
     }
-    await writeTTY(tty, `\n${message}`);
-    logAsk(now(), "Waiting for key...");
-    while (true) {
-      const code = await readSingleKeyRaw(tty);
-      if (code === null) { logAsk("readSingleKeyRaw=null"); return true; }
-      if (code === 27) { await writeTTY(tty, "\n❌ Cancelled\n"); logAsk("ESC during confirm"); return false; }
-      const k = String.fromCharCode(code);
-      logAsk("key:", code, JSON.stringify(k));
-      if (k === "y" || k === "Y") { await writeTTY(tty, "y\n"); return true; }
-      if (k === "n" || k === "N") { await writeTTY(tty, "n\n"); return false; }
-    }
-  });
+  } else {
+    // Non-interactive or piped input
+    console.log("⚠️  Non-interactive environment — auto-proceeding");
+    return true;
+  }
 }
 
 function makeEscWatcher() {
@@ -515,31 +539,17 @@ Output the raw shell command only:`;
     const model = getDefaultModel();
     await ensureModel(model);
 
-    // ESC watcher during generation
-    const esc = makeEscWatcher();
-
-    const aiPromise = globalThis.hlvm.core.ai.ollama.chat({
+    // Simple generation without ESC watcher (it conflicts with REPL)
+    const response = await globalThis.hlvm.core.ai.ollama.chat({
       model,
       messages: [{ role: 'system', content: prompt }, { role: 'user', content: command }],
       stream: false,
       options: { temperature: 0.3, num_predict: 100, top_p: 0.9 }
-    }).then(r => r.message?.content || '');
-
-    const race = await Promise.race([
-      aiPromise.then(s => ({ t: 'ok', s })),
-      esc.done.then(x => ({ t: x })) // 'esc' | 'stopped'
-    ]);
-
-    if (race.t === 'esc') {
-      computing.stop();
-      console.log('\n\x1b[33m⚠️  Cancelled by user (ESC)\x1b[0m');
-      return null;
-    }
-    esc.stop();
+    });
 
     computing.stop();
-
-    let script = (race.t === 'ok' ? race.s : '') || '';
+    let script = response.message?.content || '';
+    
     // Clean up AI output
     script = script
       .replace(/^```[\w]*\n?/gm, '')
@@ -563,13 +573,57 @@ Output the raw shell command only:`;
     console.log('\x1b[32m' + script + '\x1b[0m');
     console.log('─'.repeat(50));
 
-    // Confirmation (single keypress) or skip
-    if (confirm === true) {
-      logAsk("confirm=true");
-      const ok = await confirmSingleKeyTTY("Execute? (y/n): ");
-      if (!ok) { console.log('❌ Cancelled'); return null; }
-    } else {
+    // Confirmation or skip
+    if (confirm === false) {
       logAsk("confirm=false (skip prompts)");
+    } else {
+      // Clean UI with emoji and clear instructions
+      console.log("\n  ❓ Execute this command?");
+      console.log("");
+      console.log("     \x1b[32m→ y\x1b[0m  = Yes, execute");
+      console.log("     \x1b[31m→ n\x1b[0m  = No, cancel");
+      console.log("");
+      process.stdout.write("> "); // Show prompt to indicate waiting for input
+      
+      // Set up getter properties that trigger on access
+      let responded = false;
+      let response = null;
+      
+      Object.defineProperty(globalThis, 'y', {
+        get: function() {
+          responded = true;
+          response = 'yes';
+          console.log("✅ Proceeding with execution...");
+          return undefined; // Return undefined so REPL doesn't print anything ugly
+        },
+        configurable: true
+      });
+      
+      Object.defineProperty(globalThis, 'n', {
+        get: function() {
+          responded = true;
+          response = 'no';
+          console.log("❌ Cancelled");
+          return undefined;
+        },
+        configurable: true
+      });
+      
+      // Wait for response (max 30 seconds)
+      const startTime = Date.now();
+      while (!responded && (Date.now() - startTime < 30000)) {
+        await new Promise(r => setTimeout(r, 100));
+      }
+      
+      // Clean up
+      delete globalThis.y;
+      delete globalThis.n;
+      
+      if (!responded || response !== 'yes') {
+        if (!responded) console.log("⏱️  Timeout - cancelled");
+        process.stdout.write("\n> "); // Show prompt after cancel
+        return null;
+      }
     }
 
     // Execute
@@ -591,7 +645,8 @@ Output the raw shell command only:`;
       if (result && result.stdout) console.log(result.stdout);
 
       if (result && result.code === 0) {
-        console.log('✅ Done');
+        console.log('✅ Done\n');
+        process.stdout.write("> "); // Show prompt to indicate ready for next command
       } else if (result) {
         console.log(`❌ Command failed with code ${result.code}`);
         if (result.stderr) console.error(result.stderr);
@@ -607,15 +662,20 @@ Output the raw shell command only:`;
           console.log('   open "x-apple.systempreferences:com.apple.preference.security?Privacy"');
         }
       }
+      if (result?.code !== 0) {
+        process.stdout.write("\n> "); // Show prompt after error
+      }
       return result;
     } catch (execError) {
       console.error('❌ Execution error:', execError.message);
+      process.stdout.write("\n> "); // Show prompt after error
       return null;
     }
   } catch (error) {
     console.error('❌ Error:', error.message);
     if (error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED'))
       console.error('Ollama service is not running. Start it with: hlvm ollama serve');
+    process.stdout.write("\n> "); // Show prompt after error
     return null;
   }
 }
