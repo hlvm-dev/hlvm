@@ -44,30 +44,28 @@ class SystemHandlers {
 
 class ModuleHandlers {
   static async list(): Promise<any> {
-    return globalThis.hlvm?.modules?.list?.() || [];
+    // Use actual core API that exists
+    return globalThis.hlvm?.core?.storage?.esm?.list?.() || [];
   }
 
   static async save(params: any): Promise<any> {
-    if (!globalThis.hlvm?.modules?.save) {
+    // Use actual core API that exists
+    if (!globalThis.hlvm?.core?.storage?.esm?.set) {
       throw new Error("Module save not available");
     }
-    return globalThis.hlvm.modules.save(params.name, params.code);
+    return globalThis.hlvm.core.storage.esm.set(params.name, params.code);
   }
 
-  static async load(params: any): Promise<any> {
-    if (!globalThis.hlvm?.modules?.load) {
-      throw new Error("Module load not available");
-    }
-    return globalThis.hlvm.modules.load(params.name);
-  }
+  // Removed load method - GUI reads database directly instead
 }
 
 class AIHandlers {
   static async generate(params: any): Promise<any> {
-    if (!globalThis.hlvm?.ai?.ollama?.chat) {
+    // Use actual core API that exists
+    if (!globalThis.hlvm?.core?.ai?.ollama?.chat) {
       throw new Error("AI not available");
     }
-    return globalThis.hlvm.ai.ollama.chat(params.prompt, params.model);
+    return globalThis.hlvm.core.ai.ollama.chat(params.prompt, params.model);
   }
 }
 
@@ -139,7 +137,7 @@ class HLVMBridge {
     // Module handlers
     this.handlers.set("modules.list", ModuleHandlers.list);
     this.handlers.set("modules.save", ModuleHandlers.save);
-    this.handlers.set("modules.load", ModuleHandlers.load);
+    // Removed modules.load - GUI reads database directly
 
     // AI handlers
     this.handlers.set("ai.generate", AIHandlers.generate);
