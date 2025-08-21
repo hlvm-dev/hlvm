@@ -116,8 +116,9 @@ export function unobserve(target) {
   
   // Remove file watcher
   if (fileWatchers.has(target)) {
-    const watcher = fileWatchers.get(target);
-    watcher.close();
+    const { watcher, abortController } = fileWatchers.get(target);
+    abortController.abort(); // Signal the watching loop to stop
+    watcher.close(); // Close the watcher
     fileWatchers.delete(target);
     return true;
   }
@@ -155,19 +156,26 @@ function observeFile(path, hooks) {
   // Use Deno.watchFs for file watching
   const watcher = Deno.watchFs(path);
   
-  // Store watcher for cleanup
-  fileWatchers.set(path, watcher);
+  // Create abort controller for cleanup
+  const abortController = new AbortController();
   
-  // Start watching in background
+  // Store watcher with abort controller for cleanup
+  fileWatchers.set(path, { watcher, abortController });
+  
+  // Start watching in background with proper cleanup
   (async () => {
     try {
       for await (const event of watcher) {
+        // Check if we should stop watching
+        if (abortController.signal.aborted) break;
+        
         if (event.kind === 'modify' || event.kind === 'create') {
           await hooks.onChange(event, path);
         }
       }
     } catch (error) {
-      if (hooks.error) {
+      // Ignore errors from closing the watcher
+      if (!abortController.signal.aborted && hooks.error) {
         await hooks.error(error, path);
       }
     }

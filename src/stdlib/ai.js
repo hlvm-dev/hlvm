@@ -82,62 +82,71 @@ function reprintReplPrompt() {
 // Model manager (Ollama)
 let modelChecked = false;
 let modelAvailable = false;
-let downloadInProgress = false;
+let downloadPromise = null; // Use a promise instead of polling
 
 async function ensureModel(modelName) {
   const model = modelName || getDefaultModel();
   if (modelChecked && modelAvailable) return true;
-  if (downloadInProgress) {
+  
+  // If download is in progress, wait for the existing promise
+  if (downloadPromise) {
     console.log("⏳ Model download already in progress...");
-    while (downloadInProgress) await new Promise(r => setTimeout(r, DOWNLOAD_WAIT_INTERVAL));
-    return modelAvailable;
+    return await downloadPromise;
   }
 
-  try {
-    const ollamaCheck = await globalThis.hlvm.core.ai.ollama.list().catch(() => null);
-    if (!ollamaCheck) {
-      console.log("\n🚀 Starting AI service...");
-      await globalThis.hlvm.core.system.exec(["./resources/ollama", "serve"], { background: true });
-      await new Promise(r => setTimeout(r, MODEL_STARTUP_DELAY));
-    }
-
-    const models = await globalThis.hlvm.core.ai.ollama.list();
-    const hasModel = models.models?.some(m => m.name === model);
-    if (hasModel) { modelChecked = true; modelAvailable = true; return true; }
-
-    downloadInProgress = true;
-    console.log("\n╔════════════════════════════════════════════════════════════════╗");
-    console.log("║  🤖 Setting up AI capabilities (one-time download)              ║");
-    console.log("║                                                                  ║");
-    console.log(`║  Downloading model: ${model.padEnd(40)}  ║`);
-    console.log("║  This will take a few minutes but only happens once.            ║");
-    console.log("╚════════════════════════════════════════════════════════════════╝\n");
-    console.log("  ⏳ Downloading... (this may take 2-5 minutes)");
-    console.log("  📦 Model size: ~1GB");
-
+  // Create download promise that can be shared
+  downloadPromise = (async () => {
     try {
-      await globalThis.hlvm.core.ai.ollama.pull({ name: model, stream: false });
-      console.log("\n✅ Model downloaded successfully!");
-    } catch (e) {
-      console.error("\n❌ Download failed:", e.message);
-      throw e;
+      const ollamaCheck = await globalThis.hlvm.core.ai.ollama.list().catch(() => null);
+      if (!ollamaCheck) {
+        console.log("\n🚀 Starting AI service...");
+        await globalThis.hlvm.core.system.exec(["./resources/ollama", "serve"], { background: true });
+        await new Promise(r => setTimeout(r, MODEL_STARTUP_DELAY));
+      }
+
+      const models = await globalThis.hlvm.core.ai.ollama.list();
+      const hasModel = models.models?.some(m => m.name === model);
+      if (hasModel) { 
+        modelChecked = true; 
+        modelAvailable = true; 
+        downloadPromise = null;
+        return true; 
+      }
+      console.log("\n╔════════════════════════════════════════════════════════════════╗");
+      console.log("║  🤖 Setting up AI capabilities (one-time download)              ║");
+      console.log("║                                                                  ║");
+      console.log(`║  Downloading model: ${model.padEnd(40)}  ║`);
+      console.log("║  This will take a few minutes but only happens once.            ║");
+      console.log("╚════════════════════════════════════════════════════════════════╝\n");
+      console.log("  ⏳ Downloading... (this may take 2-5 minutes)");
+      console.log("  📦 Model size: ~1GB");
+
+      try {
+        await globalThis.hlvm.core.ai.ollama.pull({ name: model, stream: false });
+        console.log("\n✅ Model downloaded successfully!");
+      } catch (e) {
+        console.error("\n❌ Download failed:", e.message);
+        throw e;
+      }
+
+      const verify = await globalThis.hlvm.core.ai.ollama.list();
+      modelAvailable = verify.models?.some(m => m.name === model);
+      if (modelAvailable) console.log("\n🎉 AI capabilities ready! Your command will now continue...\n");
+      else console.error("\n❌ Failed to download model. AI features may not work.");
+
+      modelChecked = true;
+      downloadPromise = null;
+      return modelAvailable;
+    } catch (err) {
+      downloadPromise = null;
+      modelChecked = true;
+      console.error("\n⚠️ Could not set up AI:", err.message);
+      console.error("   AI features will not be available in this session.");
+      return false;
     }
-
-    const verify = await globalThis.hlvm.core.ai.ollama.list();
-    modelAvailable = verify.models?.some(m => m.name === model);
-    if (modelAvailable) console.log("\n🎉 AI capabilities ready! Your command will now continue...\n");
-    else console.error("\n❌ Failed to download model. AI features may not work.");
-
-    modelChecked = true;
-    downloadInProgress = false;
-    return modelAvailable;
-  } catch (err) {
-    downloadInProgress = false;
-    modelChecked = true;
-    console.error("\n⚠️ Could not set up AI:", err.message);
-    console.error("   AI features will not be available in this session.");
-    return false;
-  }
+  })();
+  
+  return await downloadPromise;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -562,42 +571,41 @@ Output the raw shell command only:`;
       console.log("");
       process.stdout.write("> "); // Show prompt to indicate waiting for input
       
-      // Set up getter properties that trigger on access
-      let responded = false;
-      let response = null;
-      
-      Object.defineProperty(globalThis, 'y', {
-        get: function() {
-          responded = true;
-          response = 'yes';
-          console.log("✅ Proceeding with execution...");
-          return undefined; // Return undefined so REPL doesn't print anything ugly
-        },
-        configurable: true
+      // Set up Promise-based response handling
+      let response = await new Promise((resolve) => {
+        const timeoutId = setTimeout(() => {
+          delete globalThis.y;
+          delete globalThis.n;
+          resolve(null); // Timeout
+        }, CONFIRMATION_TIMEOUT);
+        
+        Object.defineProperty(globalThis, 'y', {
+          get: function() {
+            clearTimeout(timeoutId);
+            delete globalThis.y;
+            delete globalThis.n;
+            console.log("✅ Proceeding with execution...");
+            resolve('yes');
+            return undefined;
+          },
+          configurable: true
+        });
+        
+        Object.defineProperty(globalThis, 'n', {
+          get: function() {
+            clearTimeout(timeoutId);
+            delete globalThis.y;
+            delete globalThis.n;
+            console.log("❌ Cancelled");
+            resolve('no');
+            return undefined;
+          },
+          configurable: true
+        });
       });
       
-      Object.defineProperty(globalThis, 'n', {
-        get: function() {
-          responded = true;
-          response = 'no';
-          console.log("❌ Cancelled");
-          return undefined;
-        },
-        configurable: true
-      });
-      
-      // Wait for response (max 30 seconds)
-      const startTime = Date.now();
-      while (!responded && (Date.now() - startTime < CONFIRMATION_TIMEOUT)) {
-        await new Promise(r => setTimeout(r, 100));
-      }
-      
-      // Clean up
-      delete globalThis.y;
-      delete globalThis.n;
-      
-      if (!responded || response !== 'yes') {
-        if (!responded) console.log("⏱️  Timeout - cancelled");
+      if (!response || response !== 'yes') {
+        if (!response) console.log("⏱️  Timeout - cancelled");
         process.stdout.write("\n> "); // Show prompt after cancel
         return null;
       }
@@ -647,5 +655,30 @@ Output the raw shell command only:`;
     return null;
   }
 }
+
+// Add documentation to functions (but NOT customInspect to avoid messing up structure display)
+revise.__doc__ = `revise(text, options?)
+Revises and improves text quality
+Options: tone (default/professional/casual/friendly/concise/formal), model`;
+
+draw.__doc__ = `draw(text, options?)
+Creates ASCII diagrams from text
+Options: type (auto/flowchart/sequence/tree/graph/mindmap/table), style (simple/detailed), model`;
+
+chat.__doc__ = `chat(messages, options?)
+Interactive chat with AI
+Options: model, stream, temperature, num_predict, top_p`;
+
+refactor.__doc__ = `refactor(code, options?)
+Refactors code following best practices
+Options: type (all/clean/solid/dry/unused/simplify/modern/performance), model`;
+
+ask.__doc__ = `ask(command, options?)
+Generates and optionally executes shell commands from natural language
+Options: confirm (true/false), model`;
+
+judge.__doc__ = `judge(statement, options?)
+Evaluates truth value of a statement (returns true/false)
+Options: model`;
 
 export default { revise, draw, chat, refactor, ask, judge };

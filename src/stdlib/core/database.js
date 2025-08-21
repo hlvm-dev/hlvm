@@ -1,29 +1,29 @@
 // Database module - Cross-platform SQLite persistence
 
 import { DatabaseSync } from "node:sqlite";  // Works in compiled binaries!
-import * as platform from "./platform.js";
+import { isDarwin, isWindows, homeDir, pathSep, os, tempDir } from "./platform.js";
 
 // Module configuration
 class ModuleConfig {
   static get dbPath() {
-    if (platform.isDarwin) {
-      return `${platform.homeDir()}/Library/Application Support/HLVM/HLVM.sqlite`;
-    } else if (platform.isWindows) {
-      const appData = Deno.env.get("APPDATA") || `${platform.homeDir()}\\AppData\\Roaming`;
+    if (isDarwin) {
+      return `${homeDir()}/Library/Application Support/HLVM/HLVM.sqlite`;
+    } else if (isWindows) {
+      const appData = Deno.env.get("APPDATA") || `${homeDir()}\\AppData\\Roaming`;
       return `${appData}\\HLVM\\HLVM.sqlite`;
     } else {
-      const xdgData = Deno.env.get("XDG_DATA_HOME") || `${platform.homeDir()}/.local/share`;
+      const xdgData = Deno.env.get("XDG_DATA_HOME") || `${homeDir()}/.local/share`;
       return `${xdgData}/HLVM/HLVM.sqlite`;
     }
   }
 
   static get dbDir() {
     const path = this.dbPath;
-    return path.substring(0, path.lastIndexOf(platform.isWindows ? "\\" : "/"));
+    return path.substring(0, path.lastIndexOf(isWindows ? "\\" : "/"));
   }
 
   static get modulesDir() {
-    return `${this.dbDir}${platform.pathSep}modules`;
+    return `${this.dbDir}${pathSep}modules`;
   }
 }
 
@@ -88,7 +88,7 @@ class DatabaseManager {
     const oldModules = this.db.prepare("SELECT * FROM modules").all();
     for (const mod of oldModules) {
       const fileName = `${mod.key}.module.js`;
-      const filePath = `${this.modulesDir}${platform.pathSep}${fileName}`;
+      const filePath = `${this.modulesDir}${pathSep}${fileName}`;
       await Deno.writeTextFile(filePath, mod.source_code);
       
       this.db.prepare(`
@@ -124,9 +124,9 @@ class ModuleBundler {
     this.esbuild = esbuild;
   }
 
-  isFilePath(input) {
+  async isFilePath(input) {
     try {
-      const stat = Deno.statSync(input);
+      const stat = await Deno.stat(input);
       return stat.isFile;
     } catch {
       return input.includes('/') || input.endsWith('.js') || input.endsWith('.ts');
@@ -136,7 +136,7 @@ class ModuleBundler {
   async bundle(codeOrPath) {
     if (!this.esbuild) {
       // Fallback without bundling
-      const isPath = this.isFilePath(codeOrPath);
+      const isPath = await this.isFilePath(codeOrPath);
       if (isPath) {
         return await Deno.readTextFile(codeOrPath);
       }
@@ -145,7 +145,7 @@ class ModuleBundler {
         : codeOrPath;
     }
     
-    const isPath = this.isFilePath(codeOrPath);
+    const isPath = await this.isFilePath(codeOrPath);
     
     try {
       const result = await this.esbuild.build({
@@ -198,7 +198,7 @@ class ModuleOperations {
       
       // Save file
       const fileName = `${name}.module.js`;
-      const filePath = `${this.dbManager.modulesDir}${platform.pathSep}${fileName}`;
+      const filePath = `${this.dbManager.modulesDir}${pathSep}${fileName}`;
       await Deno.writeTextFile(filePath, bundled);
       
       // Save metadata
@@ -222,7 +222,7 @@ class ModuleOperations {
     return JSON.stringify({
       hasDefaultFunction,
       createdAt: new Date().toISOString(),
-      platform: platform.os,
+      platform: os,
       bundled: true,
       isUserModule: true
     });
@@ -268,13 +268,13 @@ class ModuleOperations {
   }
 
   async readModuleCode(module) {
-    const filePath = `${this.dbManager.dbDir}${platform.pathSep}${module.file_path}`;
+    const filePath = `${this.dbManager.dbDir}${pathSep}${module.file_path}`;
     return await Deno.readTextFile(filePath);
   }
 
   async importModule(name, code) {
-    const tempDir = platform.tempDir();
-    const tempFile = `${tempDir}${platform.pathSep}hlvm-module-${name}-${Date.now()}.js`;
+    const tempDirectory = tempDir();
+    const tempFile = `${tempDirectory}${pathSep}hlvm-module-${name}-${Date.now()}.js`;
     await Deno.writeTextFile(tempFile, code);
     
     const imported = await import(`file://${tempFile}`);
@@ -323,7 +323,7 @@ class ModuleOperations {
       const module = this.getModule(name);
       
       if (module) {
-        const filePath = `${this.dbManager.dbDir}${platform.pathSep}${module.file_path}`;
+        const filePath = `${this.dbManager.dbDir}${pathSep}${module.file_path}`;
         await Deno.remove(filePath).catch(() => {});
       }
       

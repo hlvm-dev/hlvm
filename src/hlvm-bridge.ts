@@ -292,9 +292,21 @@ class HLVMBridge {
     const timeoutMs = 5000;
     
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error("Request timeout")), timeoutMs);
+      let handler: ((event: MessageEvent) => void) | null = null;
       
-      const handler = this.createResponseHandler(id, timeout, resolve, reject);
+      const cleanup = () => {
+        if (handler) {
+          socket.removeEventListener("message", handler);
+          handler = null;
+        }
+      };
+      
+      const timeout = setTimeout(() => {
+        cleanup();
+        reject(new Error("Request timeout"));
+      }, timeoutMs);
+      
+      handler = this.createResponseHandler(id, timeout, resolve, reject, cleanup);
       socket.addEventListener("message", handler);
       
       const request: JSONRPCRequest = { jsonrpc: "2.0", id, method, params };
@@ -310,14 +322,15 @@ class HLVMBridge {
     expectedId: string | number,
     timeout: NodeJS.Timeout,
     resolve: (value: any) => void,
-    reject: (reason: any) => void
+    reject: (reason: any) => void,
+    cleanup: () => void
   ): (event: MessageEvent) => void {
     return function handler(event: MessageEvent) {
       try {
         const response = JSON.parse(event.data) as JSONRPCResponse;
         if (response.id === expectedId) {
           clearTimeout(timeout);
-          (event.target as WebSocket).removeEventListener("message", handler);
+          cleanup();
           
           if (response.error) {
             reject(new Error(response.error.message));

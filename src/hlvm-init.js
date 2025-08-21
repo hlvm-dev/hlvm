@@ -30,7 +30,8 @@ import * as env from "./stdlib/core/env.js";
 import docRegistry from "./stdlib/documentation.js";
 
 // Create hlvm namespace inside IIFE to hide from global scope
-globalThis.hlvm = (() => {
+// Use void to prevent output when executed in REPL
+void (globalThis.hlvm = (() => {
   const hlvmBase = {
     // LAYER 1: Core primitives - all building blocks
     core: {
@@ -370,39 +371,9 @@ ${aliases.map(a => `  \x1b[32m${a.name}()\x1b[0m${' '.repeat(Math.max(1, 24 - a.
   // Add user storage namespace for user-defined properties (before setting null prototypes)
   hlvmBase.core.storage.user = {};  // Will be populated after setupCustomPropertyPersistence
 
-  // Ensure user-facing namespaces use null prototypes to avoid Object.prototype noise in REPL tab completion
-  // Only apply to objects we construct here (skip module namespace or external objects which may be non-extensible)
-  const __setNullProto = (obj) => {
-    if (obj && typeof obj === 'object') {
-      try { Object.setPrototypeOf(obj, null); } catch (_) { /* ignore */ }
-    }
-  };
-
-  // stdlib
-  __setNullProto(hlvmBase.stdlib);
-  __setNullProto(hlvmBase.stdlib.ai);
-
-  // core namespaces
-  __setNullProto(hlvmBase.core);
-  __setNullProto(hlvmBase.core.system);
-  __setNullProto(hlvmBase.core.storage);
-  __setNullProto(hlvmBase.core.storage.esm);
-  __setNullProto(hlvmBase.core.storage.user);
-  __setNullProto(hlvmBase.core.io);
-  __setNullProto(hlvmBase.core.io.fs);
-  __setNullProto(hlvmBase.core.io.clipboard);
-  __setNullProto(hlvmBase.core.computer);
-  __setNullProto(hlvmBase.core.computer.keyboard);
-  __setNullProto(hlvmBase.core.computer.mouse);
-  __setNullProto(hlvmBase.core.computer.screen);
-  __setNullProto(hlvmBase.core.ui);
-  __setNullProto(hlvmBase.core.ui.notification);
-  __setNullProto(hlvmBase.core.ai);
-  __setNullProto(hlvmBase.core.event);
-  __setNullProto(hlvmBase.core.alias);
-
-  // app (avoid touching hlvmBase.app.hlvm which comes from external module)
-  __setNullProto(hlvmBase.app);
+  // NOTE: We're NOT setting null prototypes as it breaks Deno's tab completion.
+  // The trade-off is we'll see Object.prototype methods (toString, valueOf, etc.)
+  // but tab completion will work properly at all nested levels.
 
   // Setup alias persistence
   function setupAliases() {
@@ -555,14 +526,34 @@ ${aliases.map(a => `  \x1b[32m${a.name}()\x1b[0m${' '.repeat(Math.max(1, 24 - a.
     `);
   }
 
-  // Create a clean object without Object.prototype for better tab completion
-  // This prevents showing methods like valueOf, toString, etc.
-  const cleanHlvm = Object.create(null);
-  
-  // Copy all properties from hlvmBase to cleanHlvm
-  for (const key in hlvmBase) {
-    cleanHlvm[key] = hlvmBase[key];
+  // Function to recursively convert all objects to null prototype
+  function cleanObject(obj) {
+    if (obj === null || obj === undefined) return obj;
+    if (typeof obj !== 'object') return obj;
+    if (typeof obj === 'function') return obj;
+    if (Array.isArray(obj)) return obj;
+    
+    // Create new object with null prototype
+    const clean = Object.create(null);
+    
+    // Copy all properties
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        const value = obj[key];
+        // Recursively clean nested objects
+        if (value && typeof value === 'object' && !Array.isArray(value) && typeof value !== 'function') {
+          clean[key] = cleanObject(value);
+        } else {
+          clean[key] = value;
+        }
+      }
+    }
+    
+    return clean;
   }
+  
+  // Clean the entire hlvmBase object tree to remove Object.prototype pollution
+  const cleanHlvm = cleanObject(hlvmBase);
   
   // Setup persistence (must be after cleanHlvm is created)
   setupAliases();
@@ -580,6 +571,24 @@ ${aliases.map(a => `  \x1b[32m${a.name}()\x1b[0m${' '.repeat(Math.max(1, 24 - a.
       // Delegate ALL to storage.user.remove - it handles system prop filtering  
       hlvmBase.core.storage.user.remove(prop);
       return true;
+    },
+    
+    // CRITICAL: These traps are required for tab completion to work in Deno REPL
+    // Use Reflect to properly forward all operations
+    has(target, prop) {
+      return Reflect.has(target, prop);
+    },
+    
+    ownKeys(target) {
+      return Reflect.ownKeys(target);
+    },
+    
+    getOwnPropertyDescriptor(target, prop) {
+      return Reflect.getOwnPropertyDescriptor(target, prop);
+    },
+    
+    get(target, prop) {
+      return Reflect.get(target, prop);
     }
   });
 
@@ -679,9 +688,11 @@ ${aliases.map(a => `  \x1b[32m${a.name}()\x1b[0m${' '.repeat(Math.max(1, 24 - a.
   // Load user properties on startup
   hlvmBase.core.storage.user.load();
 
-  // Return the proxied object for auto-persist
-  return hlvmProxy;
-})();  // End IIFE - hlvmBase is now hidden from global scope
+  // TEMPORARY: Return cleanHlvm directly without Proxy to test tab completion
+  // TODO: Find a better way to handle persistence that doesn't break tab completion
+  return cleanHlvm;
+  // return hlvmProxy;
+})());  // End IIFE - hlvmBase is now hidden from global scope - extra parens for void operator
 
 // Global utilities
 globalThis.pprint = (obj) => console.log(JSON.stringify(obj, null, 2));

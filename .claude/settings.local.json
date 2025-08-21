@@ -162,7 +162,9 @@
       "WebFetch(domain:workdrive.zohoexternal.com)",
       "WebFetch(domain:hlvm.dev)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:jangseoksoon.org)"
+      "WebFetch(domain:jangseoksoon.org)",
+      "Bash(git log:*)",
+      "Bash(./scripts/build-bundle.ts)"
     ],
     "deny": [],
     "ask": [],

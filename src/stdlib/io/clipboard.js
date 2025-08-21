@@ -1,7 +1,6 @@
 // Clipboard module - Cross-platform clipboard operations
 
-import { isDarwin, isWindows } from "../core/platform.js";
-import { executor, powerShell, linuxTools } from "../core/command.js";
+import { platformCommand, PowerShellTemplates, checkSuccess, initializeDocs } from "../core/utils.js";
 
 /**
  * Reads text from system clipboard
@@ -11,21 +10,18 @@ import { executor, powerShell, linuxTools } from "../core/command.js";
  * // → "Hello from clipboard"
  */
 export async function read() {
-  if (isDarwin) {
-    return await executor.executeText("pbpaste");
-    
-  } else if (isWindows) {
-    const result = await powerShell.run("Get-Clipboard");
-    return result.replace(/\r\n$/, '');
-    
-  } else {
-    // Linux: Try multiple clipboard tools
-    return await linuxTools.tryTools([
+  const result = await platformCommand({
+    darwin: { cmd: "pbpaste", args: [] },
+    windows: { script: PowerShellTemplates.getClipboard },
+    linux: [
       { cmd: "xclip", args: ["-selection", "clipboard", "-o"] },
       { cmd: "xsel", args: ["--clipboard", "--output"] },
       { cmd: "wl-paste", args: [] }
-    ]);
-  }
+    ]
+  });
+  
+  // Clean Windows line endings
+  return result.stdout.replace(/\r\n$/, '');
 }
 
 /**
@@ -37,49 +33,50 @@ export async function read() {
  * // → Text copied to clipboard
  */
 export async function write(text) {
-  if (isDarwin) {
-    await writeToCommand("pbcopy", [], text);
-    
-  } else if (isWindows) {
-    // Escape quotes for PowerShell
-    const escaped = text.replace(/"/g, '`"').replace(/\$/g, '`$');
-    await powerShell.run(`Set-Clipboard -Value "${escaped}"`);
-    
-  } else {
-    // Linux: Try multiple clipboard tools
-    const tools = [
-      { cmd: "xclip", args: ["-selection", "clipboard"] },
-      { cmd: "xsel", args: ["--clipboard", "--input"] },
-      { cmd: "wl-copy", args: [] }
-    ];
-    
-    for (const tool of tools) {
-      try {
-        await writeToCommand(tool.cmd, tool.args, text);
-        return;
-      } catch {
-        // Try next tool
-      }
-    }
-    
-    throw new Error(
-      "Clipboard write failed. Install one of: xclip, xsel, or wl-clipboard"
-    );
+  // For darwin/linux, we need stdin support
+  const writeWithStdin = async (cmd, args) => {
+    const p = new Deno.Command(cmd, { args, stdin: "piped" });
+    const proc = p.spawn();
+    const writer = proc.stdin.getWriter();
+    await writer.write(new TextEncoder().encode(text));
+    await writer.close();
+    const status = await proc.status;
+    return { success: status.success, stdout: "", stderr: "", code: status.code };
+  };
+  
+  // Darwin uses stdin
+  if (globalThis.Deno.build.os === "darwin") {
+    const result = await writeWithStdin("pbcopy", []);
+    checkSuccess(result, "Clipboard write");
+    return;
   }
-}
-
-/**
- * Helper to write text to a command via stdin
- * @private
- */
-async function writeToCommand(cmd, args, text) {
-  const p = new Deno.Command(cmd, { args, stdin: "piped" });
-  const proc = p.spawn();
-  const writer = proc.stdin.getWriter();
-  await writer.write(new TextEncoder().encode(text));
-  await writer.close();
-  const { success } = await proc.status;
-  if (!success) throw new Error(`Command ${cmd} failed`);
+  
+  // Windows uses PowerShell
+  if (globalThis.Deno.build.os === "windows") {
+    const result = await platformCommand({
+      windows: { script: PowerShellTemplates.setClipboard(text) }
+    });
+    checkSuccess(result, "Clipboard write");
+    return;
+  }
+  
+  // Linux tries multiple tools with stdin
+  const tools = [
+    { cmd: "xclip", args: ["-selection", "clipboard"] },
+    { cmd: "xsel", args: ["--clipboard", "--input"] },
+    { cmd: "wl-copy", args: [] }
+  ];
+  
+  for (const tool of tools) {
+    try {
+      const result = await writeWithStdin(tool.cmd, tool.args);
+      if (result.success) return;
+    } catch {
+      // Try next tool
+    }
+  }
+  
+  throw new Error("Clipboard write failed. Install one of: xclip, xsel, or wl-clipboard");
 }
 
 /**
@@ -92,7 +89,8 @@ async function writeToCommand(cmd, args, text) {
  */
 export async function isAvailable() {
   try {
-    if (isDarwin || isWindows) {
+    const os = globalThis.Deno.build.os;
+    if (os === "darwin" || os === "windows") {
       return true; // Built-in support
     }
     
@@ -111,5 +109,17 @@ export async function isAvailable() {
   }
 }
 
-
 // Initialize docs on module load
+initializeDocs({ read, write, isAvailable }, {
+  read: `read()
+Reads text from system clipboard
+Returns: clipboard text content`,
+  
+  write: `write(text)
+Writes text to system clipboard
+Parameters: text - string to copy`,
+  
+  isAvailable: `isAvailable()
+Checks if clipboard operations are available
+Returns: true if clipboard is available`
+});

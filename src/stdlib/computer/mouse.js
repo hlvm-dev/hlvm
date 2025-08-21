@@ -1,7 +1,6 @@
 // Mouse module - Cross-platform mouse automation
 
-import { platformExecutor, powerShell, linuxTools } from "../core/command.js";
-import { isDarwin, isWindows } from "../core/platform.js";
+import { platformCommand, PowerShellTemplates, initializeDocs } from "../core/utils.js";
 
 /**
  * Move mouse cursor to specified position
@@ -10,26 +9,30 @@ import { isDarwin, isWindows } from "../core/platform.js";
  * @returns {Promise<void>}
  */
 export async function move(x, y) {
-  if (isDarwin) {
+  const os = globalThis.Deno.build.os;
+  
+  if (os === "darwin") {
     try {
-      await platformExecutor.executeText("cliclick", [`m:${x},${y}`]);
+      await platformCommand({
+        darwin: { cmd: "cliclick", args: [`m:${x},${y}`] }
+      });
     } catch {
       // Fallback to Python/Quartz
       const script = `
 import Quartz
 Quartz.CGWarpMouseCursorPosition((${x}, ${y}))`;
-      await platformExecutor.executeText("python3", ["-c", script]);
+      await platformCommand({
+        darwin: { cmd: "python3", args: ["-c", script] }
+      });
     }
-  } else if (isWindows) {
-    await powerShell.run(`
-[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point(${x}, ${y})
-    `, ['forms', 'drawing']);
   } else {
-    // Linux
-    await linuxTools.tryTools([
-      { cmd: "xdotool", args: ["mousemove", String(x), String(y)] },
-      { cmd: "ydotool", args: ["mousemove", String(x), String(y)] }
-    ]);
+    await platformCommand({
+      windows: { script: PowerShellTemplates.setCursorPosition(x, y) },
+      linux: [
+        { cmd: "xdotool", args: ["mousemove", String(x), String(y)] },
+        { cmd: "ydotool", args: ["mousemove", String(x), String(y)] }
+      ]
+    });
   }
 }
 
@@ -46,35 +49,46 @@ export async function click(x = null, y = null, button = "left") {
     await move(x, y);
   }
   
-  if (isDarwin) {
+  const os = globalThis.Deno.build.os;
+  
+  if (os === "darwin") {
     const buttonMap = { "left": "c", "right": "rc", "middle": "mc" };
     const args = x !== null && y !== null 
       ? [`${buttonMap[button]}:${x},${y}`]
       : [buttonMap[button]];
     
     try {
-      await platformExecutor.executeText("cliclick", args);
+      await platformCommand({ darwin: { cmd: "cliclick", args } });
     } catch {
       // Fallback to Python/Quartz
       await clickWithQuartz(x, y, button);
     }
-  } else if (isWindows) {
-    await clickWithWindows(x, y, button);
+  } else if (os === "windows") {
+    const moveScript = x !== null && y !== null 
+      ? PowerShellTemplates.setCursorPosition(x, y)
+      : "";
+    await platformCommand({
+      windows: { script: moveScript + PowerShellTemplates.mouseClick(button) }
+    });
   } else {
     // Linux
     const buttonMap = { "left": "1", "middle": "2", "right": "3" };
     const buttonNum = buttonMap[button] || "1";
     
     if (x !== null && y !== null) {
-      await linuxTools.tryTools([
-        { cmd: "xdotool", args: ["mousemove", String(x), String(y), "click", buttonNum] },
-        { cmd: "ydotool", args: ["mousemove", String(x), String(y), "click", buttonNum] }
-      ]);
+      await platformCommand({
+        linux: [
+          { cmd: "xdotool", args: ["mousemove", String(x), String(y), "click", buttonNum] },
+          { cmd: "ydotool", args: ["mousemove", String(x), String(y), "click", buttonNum] }
+        ]
+      });
     } else {
-      await linuxTools.tryTools([
-        { cmd: "xdotool", args: ["click", buttonNum] },
-        { cmd: "ydotool", args: ["click", buttonNum] }
-      ]);
+      await platformCommand({
+        linux: [
+          { cmd: "xdotool", args: ["click", buttonNum] },
+          { cmd: "ydotool", args: ["click", buttonNum] }
+        ]
+      });
     }
   }
 }
@@ -85,33 +99,31 @@ export async function click(x = null, y = null, button = "left") {
  */
 export async function position() {
   let result;
+  const os = globalThis.Deno.build.os;
   
-  if (isDarwin) {
+  if (os === "darwin") {
     try {
-      result = await platformExecutor.executeText("cliclick", ["p"]);
+      result = await platformCommand({ darwin: { cmd: "cliclick", args: ["p"] } });
     } catch {
       // Fallback to Python/Quartz
       const script = `
 import Quartz
 pos = Quartz.NSEvent.mouseLocation()
 print(f"{int(pos.x)},{int(pos.y)}")`;
-      result = await platformExecutor.executeText("python3", ["-c", script]);
+      result = await platformCommand({ darwin: { cmd: "python3", args: ["-c", script] } });
     }
-  } else if (isWindows) {
-    result = await powerShell.run(`
-$pos = [System.Windows.Forms.Cursor]::Position
-Write-Host "$($pos.X),$($pos.Y)"
-    `, ['forms']);
   } else {
-    // Linux
-    result = await linuxTools.tryTools([
-      { cmd: "xdotool", args: ["getmouselocation"] },
-      { cmd: "ydotool", args: ["mousemove", "--get"] }
-    ]);
+    result = await platformCommand({
+      windows: { script: PowerShellTemplates.getCursorPosition },
+      linux: [
+        { cmd: "xdotool", args: ["getmouselocation"] },
+        { cmd: "ydotool", args: ["mousemove", "--get"] }
+      ]
+    });
   }
   
   // Parse position from result
-  const output = result.trim();
+  const output = result.stdout.trim();
   
   // Linux xdotool format: "x:123 y:456 ..."
   if (output.includes("x:") && output.includes("y:")) {
@@ -156,9 +168,13 @@ export async function doubleClick(x = null, y = null) {
  * @returns {Promise<void>}
  */
 export async function drag(fromX, fromY, toX, toY) {
-  if (isDarwin) {
+  const os = globalThis.Deno.build.os;
+  
+  if (os === "darwin") {
     try {
-      await platformExecutor.executeText("cliclick", [`dd:${fromX},${fromY}`, `du:${toX},${toY}`]);
+      await platformCommand({
+        darwin: { cmd: "cliclick", args: [`dd:${fromX},${fromY}`, `du:${toX},${toY}`] }
+      });
     } catch {
       // Fallback to basic move and click
       await move(fromX, fromY);
@@ -166,8 +182,11 @@ export async function drag(fromX, fromY, toX, toY) {
       await move(toX, toY);
       await click(toX, toY);
     }
-  } else if (isWindows) {
-    await powerShell.run(`
+  } else {
+    await platformCommand({
+      windows: {
+        script: `
+${PowerShellTemplates.addWindowsTypes}
 Add-Type @"
   using System;
   using System.Runtime.InteropServices;
@@ -184,11 +203,9 @@ Add-Type @"
 # Move to end position
 [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point(${toX}, ${toY})
 # Mouse up
-[Mouse]::mouse_event(0x0004, 0, 0, 0, 0)
-    `, ['forms', 'drawing']);
-  } else {
-    // Linux
-    await linuxTools.tryTools([
+[Mouse]::mouse_event(0x0004, 0, 0, 0, 0)`
+    },
+    linux: [
       { 
         cmd: "xdotool", 
         args: ["mousemove", String(fromX), String(fromY), "mousedown", "1",
@@ -199,11 +216,12 @@ Add-Type @"
         args: ["mousemove", String(fromX), String(fromY), "mousedown", "1",
                 "mousemove", String(toX), String(toY), "mouseup", "1"]
       }
-    ]);
+    ]
+    });
   }
 }
 
-// Helper functions for complex operations
+// Helper function for macOS Quartz fallback
 async function clickWithQuartz(x, y, button) {
   const script = `
 import Quartz
@@ -242,36 +260,28 @@ Quartz.CGEventPost(Quartz.kCGHIDEventTap, event)
 event = Quartz.CGEventCreateMouseEvent(None, up_type, (x, y), button_type)
 Quartz.CGEventPost(Quartz.kCGHIDEventTap, event)`;
   
-  await platformExecutor.executeText("python3", ["-c", script]);
+  await platformCommand({ darwin: { cmd: "python3", args: ["-c", script] } });
 }
 
-async function clickWithWindows(x, y, button) {
-  const moveScript = x !== null && y !== null ? `
-[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point(${x}, ${y})
-  ` : "";
+// Initialize docs on module load
+initializeDocs({ move, click, position, doubleClick, drag }, {
+  move: `move(x, y)
+Moves mouse cursor to specified position
+Parameters: x, y - coordinates`,
   
-  await powerShell.run(`
-Add-Type @"
-  using System;
-  using System.Runtime.InteropServices;
-  public class Mouse {
-    [DllImport("user32.dll")]
-    public static extern void mouse_event(int dwFlags, int dx, int dy, int cButtons, int dwExtraInfo);
-  }
-"@
-
-${moveScript}
-
-$flags = @{
-  left = @{ down = 0x0002; up = 0x0004 }
-  right = @{ down = 0x0008; up = 0x0010 }
-  middle = @{ down = 0x0020; up = 0x0040 }
-}
-
-$buttonFlags = $flags["${button}"]
-if (-not $buttonFlags) { $buttonFlags = $flags.left }
-
-[Mouse]::mouse_event($buttonFlags.down, 0, 0, 0, 0)
-[Mouse]::mouse_event($buttonFlags.up, 0, 0, 0, 0)
-  `, ['forms']);
-}
+  click: `click(x?, y?, button?)
+Clicks mouse button at position
+Parameters: x, y - coordinates (optional), button - left|right|middle`,
+  
+  position: `position()
+Gets current mouse position
+Returns: {x, y} coordinates`,
+  
+  doubleClick: `doubleClick(x?, y?)
+Double clicks at position
+Parameters: x, y - coordinates (optional)`,
+  
+  drag: `drag(fromX, fromY, toX, toY)
+Drags from one position to another
+Parameters: fromX, fromY, toX, toY - start and end coordinates`
+});

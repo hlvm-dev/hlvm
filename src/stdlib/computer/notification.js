@@ -1,6 +1,7 @@
 // Notification module - Cross-platform UI dialogs and notifications
 
 import { isDarwin, isWindows, escapeShell, decode, powershell, PS, ERRORS } from "../core/platform.js";
+import { initializeDocs } from "../core/utils.js";
 
 // DRY: Generic Linux dialog handler
 async function linuxDialog(type, message, title, defaultValue = "") {
@@ -211,3 +212,22 @@ export async function notify(message, title = "Notification", subtitle = "") {
 
 
 // Initialize docs on module load
+initializeDocs({ alert, confirm, prompt, notify }, {
+  alert: `alert(message, title?)
+Shows alert dialog
+Parameters: message, title (optional)`,
+  
+  confirm: `confirm(message, title?)
+Shows confirmation dialog
+Parameters: message, title (optional)
+Returns: true/false`,
+  
+  prompt: `prompt(message, defaultValue?, title?)
+Shows input dialog
+Parameters: message, defaultValue (optional), title (optional)
+Returns: user input or null`,
+  
+  notify: `notify(message, title?, subtitle?)
+Shows system notification
+Parameters: message, title (optional), subtitle (optional for macOS)`
+});

@@ -1,128 +1,44 @@
 // Keyboard module - Cross-platform keyboard automation with unified array format
 // Array format: ["cmd", "shift", "a"] where last element is the key, rest are modifiers
 
-import { isDarwin, isWindows, isLinux, escapeKeyboard, powershell, linuxTool, PS, ERRORS } from "../core/platform.js";
+import { platformCommand, PowerShellTemplates, initializeDocs, handleMacOSPermission } from "../core/utils.js";
+import { decode } from "../core/platform.js";
 
 // Global keyboard event listeners storage
 const keyListeners = new Map();
 
-export async function type(text) {
-  const escapedText = escapeKeyboard(text);
-  
-  if (isDarwin) {
-    // macOS: osascript (built-in)
-    const script = `tell application "System Events" to keystroke "${escapedText}"`;
-    const result = await new Deno.Command("osascript", { args: ["-e", script] }).output();
-    if (!result.success) {
-      const error = decode(result.stderr);
-      if (error.includes("not allowed to send keystrokes")) {
-        throw new Error("Keyboard control requires accessibility permissions. Go to System Settings → Privacy & Security → Accessibility and add your terminal app.");
-      }
-      throw new Error(`Keyboard type failed: ${error}`);
-    }
-    
-  } else if (isWindows) {
-    // Windows: PowerShell SendKeys (built-in)
-    const script = `
-      ${PS.forms}
-      [System.Windows.Forms.SendKeys]::SendWait("${escapedText}")
-    `;
-    await powershell(script);
-    
-  } else {
-    // Linux: Try xdotool or ydotool
-    await linuxTool(
-      ["type", text], // xdotool args
-      ["type", text], // ydotool args
-      ERRORS.LINUX_TOOLS
-    );
-  }
-}
-
 // Key mappings for cross-platform support
 const KEY_MAP = {
   // Common keys
-  "enter": { 
-    darwin: "return", 
-    windows: "{ENTER}", 
-    linux: "Return" 
-  },
-  "return": { 
-    darwin: "return", 
-    windows: "{ENTER}", 
-    linux: "Return" 
-  },
-  "tab": { 
-    darwin: "tab", 
-    windows: "{TAB}", 
-    linux: "Tab" 
-  },
-  "delete": { 
-    darwin: "delete", 
-    windows: "{DEL}", 
-    linux: "Delete" 
-  },
-  "backspace": { 
-    darwin: "delete", 
-    windows: "{BACKSPACE}", 
-    linux: "BackSpace" 
-  },
-  "escape": { 
-    darwin: "escape", 
-    windows: "{ESC}", 
-    linux: "Escape" 
-  },
-  "esc": { 
-    darwin: "escape", 
-    windows: "{ESC}", 
-    linux: "Escape" 
-  },
-  "space": { 
-    darwin: "space", 
-    windows: " ", 
-    linux: "space" 
-  },
-  "up": { 
-    darwin: "up arrow", 
-    windows: "{UP}", 
-    linux: "Up" 
-  },
-  "down": { 
-    darwin: "down arrow", 
-    windows: "{DOWN}", 
-    linux: "Down" 
-  },
-  "left": { 
-    darwin: "left arrow", 
-    windows: "{LEFT}", 
-    linux: "Left" 
-  },
-  "right": { 
-    darwin: "right arrow", 
-    windows: "{RIGHT}", 
-    linux: "Right" 
-  },
-  "home": { 
-    darwin: "home", 
-    windows: "{HOME}", 
-    linux: "Home" 
-  },
-  "end": { 
-    darwin: "end", 
-    windows: "{END}", 
-    linux: "End" 
-  },
-  "pageup": { 
-    darwin: "page up", 
-    windows: "{PGUP}", 
-    linux: "Page_Up" 
-  },
-  "pagedown": { 
-    darwin: "page down", 
-    windows: "{PGDN}", 
-    linux: "Page_Down" 
-  }
+  "enter": { darwin: "return", windows: "{ENTER}", linux: "Return" },
+  "return": { darwin: "return", windows: "{ENTER}", linux: "Return" },
+  "tab": { darwin: "tab", windows: "{TAB}", linux: "Tab" },
+  "delete": { darwin: "delete", windows: "{DEL}", linux: "Delete" },
+  "backspace": { darwin: "delete", windows: "{BACKSPACE}", linux: "BackSpace" },
+  "escape": { darwin: "escape", windows: "{ESC}", linux: "Escape" },
+  "esc": { darwin: "escape", windows: "{ESC}", linux: "Escape" },
+  "space": { darwin: "space", windows: " ", linux: "space" },
+  "up": { darwin: "up arrow", windows: "{UP}", linux: "Up" },
+  "down": { darwin: "down arrow", windows: "{DOWN}", linux: "Down" },
+  "left": { darwin: "left arrow", windows: "{LEFT}", linux: "Left" },
+  "right": { darwin: "right arrow", windows: "{RIGHT}", linux: "Right" },
+  "home": { darwin: "home", windows: "{HOME}", linux: "Home" },
+  "end": { darwin: "end", windows: "{END}", linux: "End" },
+  "pageup": { darwin: "page up", windows: "{PGUP}", linux: "Page_Up" },
+  "pagedown": { darwin: "page down", windows: "{PGDN}", linux: "Page_Down" }
 };
+
+// Helper to escape text for keyboard input
+function escapeKeyboard(text) {
+  const os = globalThis.Deno.build.os;
+  if (os === "darwin") {
+    return text.replace(/["\\]/g, '\\$&');
+  } else if (os === "windows") {
+    // PowerShell SendKeys special characters
+    return text.replace(/[+^%~(){}[\]]/g, '{$&}');
+  }
+  return text;
+}
 
 // Helper to normalize keys array
 function normalizeKeys(keys) {
@@ -148,6 +64,41 @@ function getKeyString(keys) {
   return normalized.sort().join('+');
 }
 
+export async function type(text) {
+  const escapedText = escapeKeyboard(text);
+  
+  try {
+    const result = await platformCommand({
+      darwin: {
+        cmd: "osascript",
+        args: ["-e", `tell application "System Events" to keystroke "${escapedText}"`]
+      },
+      windows: {
+        script: PowerShellTemplates.sendKeys(escapedText)
+      },
+      linux: [
+        { cmd: "xdotool", args: ["type", text] },
+        { cmd: "ydotool", args: ["type", text] }
+      ]
+    });
+    
+    // Check for macOS permission errors
+    if (!result.success && result.stderr) {
+      if (handleMacOSPermission({ stderr: result.stderr })) {
+        throw new Error("Keyboard control requires accessibility permissions");
+      }
+      throw new Error(`Keyboard type failed: ${result.stderr}`);
+    }
+    
+    return result;
+  } catch (error) {
+    if (handleMacOSPermission(error)) {
+      throw new Error("Keyboard control requires accessibility permissions. Grant access in System Settings.");
+    }
+    throw error;
+  }
+}
+
 // Updated press function that accepts array format only
 export async function press(keys) {
   // Only array format is supported
@@ -165,7 +116,10 @@ export async function press(keys) {
     linux: key
   };
   
-  if (isDarwin) {
+  const os = globalThis.Deno.build.os;
+  
+  // Build platform-specific commands
+  if (os === "darwin") {
     // macOS: osascript with modifiers
     const mods = [];
     if (modifiers.includes('cmd')) mods.push("command down");
@@ -178,16 +132,23 @@ export async function press(keys) {
       ? `tell application "System Events" to keystroke "${keyName}" using {${mods.join(", ")}}`
       : `tell application "System Events" to keystroke "${keyName}"`;
     
-    const result = await new Deno.Command("osascript", { args: ["-e", script] }).output();
-    if (!result.success) {
-      const error = decode(result.stderr);
-      if (error.includes("not allowed to send keystrokes")) {
-        throw new Error("Keyboard control requires accessibility permissions. Go to System Settings → Privacy & Security → Accessibility and add your terminal app.");
+    try {
+      const result = await platformCommand({
+        darwin: { cmd: "osascript", args: ["-e", script] }
+      });
+      
+      if (!result.success) {
+        handleMacOSPermission({ stderr: result.stderr });
+        throw new Error(`Keyboard press failed: ${result.stderr}`);
       }
-      throw new Error(`Keyboard press failed: ${error}`);
+    } catch (error) {
+      if (handleMacOSPermission(error)) {
+        throw new Error("Keyboard control requires accessibility permissions");
+      }
+      throw error;
     }
     
-  } else if (isWindows) {
+  } else if (os === "windows") {
     // Windows: PowerShell SendKeys with modifiers
     let keysStr = "";
     if (modifiers.includes('ctrl')) keysStr += "^";
@@ -195,11 +156,9 @@ export async function press(keys) {
     if (modifiers.includes('shift')) keysStr += "+";
     keysStr += keyMapping.windows;
     
-    const script = `
-      ${PS.forms}
-      [System.Windows.Forms.SendKeys]::SendWait("${keysStr}")
-    `;
-    await powershell(script);
+    await platformCommand({
+      windows: { script: PowerShellTemplates.sendKeys(keysStr) }
+    });
     
   } else {
     // Linux: xdotool or ydotool
@@ -210,11 +169,12 @@ export async function press(keys) {
     if (modifiers.includes('cmd')) linuxKeys.push("super");
     linuxKeys.push(keyMapping.linux);
     
-    await linuxTool(
-      ["key", linuxKeys.join("+")], // xdotool args
-      ["key", ...linuxKeys], // ydotool args
-      ERRORS.LINUX_TOOLS
-    );
+    await platformCommand({
+      linux: [
+        { cmd: "xdotool", args: ["key", linuxKeys.join("+")] },
+        { cmd: "ydotool", args: ["key", ...linuxKeys] }
+      ]
+    });
   }
 }
 
@@ -230,17 +190,7 @@ export function onKeyPress(keys, callback) {
   
   // Platform-specific global hotkey registration would go here
   // For now, this is a stub that stores the callbacks for future implementation
-  
-  if (isDarwin) {
-    // TODO: Use native macOS APIs or a tool like hammerspoon
-    console.warn('Global keyboard shortcuts not yet implemented. Callback registered for future use.');
-  } else if (isWindows) {
-    // TODO: Use Windows hooks or AutoHotkey
-    console.warn('Global keyboard shortcuts not yet implemented. Callback registered for future use.');
-  } else {
-    // TODO: Use X11 or Wayland APIs
-    console.warn('Global keyboard shortcuts not yet implemented. Callback registered for future use.');
-  }
+  console.warn('Global keyboard shortcuts not yet implemented. Callback registered for future use.');
   
   return true;
 }
@@ -288,5 +238,25 @@ export function listKeyListeners() {
   return result;
 }
 
-
 // Initialize docs on module load
+initializeDocs({ type, press, onKeyPress, offKeyPress, listKeyListeners }, {
+  type: `type(text)
+Types text using keyboard
+Parameters: text - string to type`,
+  
+  press: `press(keys)
+Presses key combination
+Parameters: keys - array format ["cmd", "shift", "a"]`,
+  
+  onKeyPress: `onKeyPress(keys, callback)
+Registers global keyboard shortcut listener
+Parameters: keys - array format, callback - function`,
+  
+  offKeyPress: `offKeyPress(keys, callback?)
+Unregisters keyboard shortcut listener
+Parameters: keys - array format, callback - optional specific callback`,
+  
+  listKeyListeners: `listKeyListeners()
+Lists all registered keyboard shortcuts
+Returns: array of {keys, callbackCount}`
+});
