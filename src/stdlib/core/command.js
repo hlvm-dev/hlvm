@@ -156,12 +156,3 @@ export const platformExecutor = new PlatformCommandExecutor();
 export const appleScript = new AppleScriptExecutor();
 export const powerShell = new PowerShellExecutor();
 export const linuxTools = new LinuxToolExecutor();
-
-// Export classes for extensibility
-export {
-  CommandExecutor,
-  PlatformCommandExecutor,
-  AppleScriptExecutor,
-  PowerShellExecutor,
-  LinuxToolExecutor
-};

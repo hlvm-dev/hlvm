@@ -1,9 +1,6 @@
 // HLVM Initialization - Clean Mediator
 // Imports all stdlib modules and exposes them through the hlvm namespace
 
-// Enable async spinner for all promises in REPL (disabled for now)
-// import asyncSpinner from "./stdlib/core/async-spinner.js";
-// asyncSpinner.enableAsyncSpinner();
 
 // Import all stdlib modules from organized structure
 import * as platform from "./stdlib/core/platform.js";

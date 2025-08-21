@@ -123,6 +123,60 @@ async function ensureModel(modelName) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Common helpers for deduplication
+
+// Handle Ollama connection errors consistently
+function handleOllamaError(error) {
+  console.error(`Failed: ${error.message}`);
+  if (error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED')) {
+    console.error('Ollama service is not running. Start it with: hlvm ollama serve');
+  }
+}
+
+// Clean AI response from markdown/quotes consistently  
+function cleanAIResponse(response) {
+  return response
+    .replace(/^```[\w]*\n/, '')
+    .replace(/\n```$/, '')
+    .replace(/^["']|["']$/g, '')
+    .trim();
+}
+
+// Process streaming response with colored output
+async function processStream(stream) {
+  let result = '';
+  process.stdout.write('\x1b[32m'); // Green
+  for await (const chunk of stream) {
+    if (chunk.message?.content) {
+      process.stdout.write(chunk.message.content);
+      result += chunk.message.content;
+    }
+  }
+  process.stdout.write('\x1b[0m\n'); // Reset
+  reprintReplPrompt();
+  return result;
+}
+
+// Resolve AI options with environment fallbacks
+function resolveAIOptions(options = {}, defaults = {}) {
+  return {
+    temperature: options.temperature ?? globalThis.hlvm?.env?.get?.("ai.temperature") ?? defaults.temperature,
+    num_predict: options.num_predict ?? globalThis.hlvm?.env?.get?.("ai.max_tokens") ?? defaults.num_predict,
+    top_p: options.top_p ?? defaults.top_p,
+    repeat_penalty: options.repeat_penalty ?? defaults.repeat_penalty,
+    ...defaults.extra
+  };
+}
+
+// Get input with consistent clipboard fallback
+async function getInputWithFallback(input) {
+  // If input is explicitly provided (including empty string), use it
+  // Only fallback to clipboard if input is undefined
+  if (input !== undefined) return input;
+  return await globalThis.hlvm.core.io.clipboard.read();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // System prompts
 const SYSTEM_PROMPTS = {
   default: `Improve this text: fix spelling, grammar, and clarity.
@@ -176,8 +230,7 @@ Use box drawing characters (─│┌┐└┘├┤┬┴┼) and arrows if nee
 // Common request handler - eliminates redundancy across all AI functions
 async function request(input, config = {}) {
   // Special case: if skipInputValidation is true, don't process input at all (for chat)
-  const text = config.skipInputValidation ? null : 
-    (input !== undefined ? input : await globalThis.hlvm.core.io.clipboard.read());
+  const text = config.skipInputValidation ? null : await getInputWithFallback(input);
   if (!config.skipInputValidation && (!text || !text.trim())) 
     throw new Error(config.error || 'No input provided');
   
@@ -198,9 +251,7 @@ async function request(input, config = {}) {
     return await config.process(response, text);
   } catch (e) {
     spinner?.stop();
-    console.error(`Failed: ${e.message}`);
-    if (e.message.includes('fetch failed') || e.message.includes('ECONNREFUSED'))
-      console.error('Ollama service is not running. Start it with: hlvm ollama serve');
+    handleOllamaError(e);
     return config.fallback ?? text;
   }
 }
@@ -226,8 +277,7 @@ export async function draw(input, options = {}) {
     messages: text => [{ role: 'system', content: systemPrompt }, { role: 'user', content: text }],
     options: { temperature: 0.1, num_predict: 100, top_p: 0.9, repeat_penalty: 1.0 },
     process: async response => {
-      let diagram = (response.message?.content || '')
-        .replace(/^```[\w]*\n/, '').replace(/\n```$/, '').trim();
+      let diagram = cleanAIResponse(response.message?.content || '');
       const ok = /[─│┌┐└┘├┤┬┴┼▼▲►◄╭╮╰╯═║╔╗╚╝╠╣╦╩╬]/.test(diagram);
       if (!ok && diagram.length < 50) console.warn('Generated output may not be a valid diagram');
       return diagram;
@@ -248,24 +298,15 @@ export async function revise(input, options = {}) {
     spinner: 'Revising',
     messages: text => [{ role: 'system', content: systemPrompt }, { role: 'user', content: text }],
     stream: true,
-    options: {
-      temperature: options.temperature ?? globalThis.hlvm?.env?.get?.("ai.temperature") ?? 0.3,
-      num_predict: globalThis.hlvm?.env?.get?.("ai.max_tokens") ?? 2000,
-      top_p: 0.9, repeat_penalty: 1.1
-    },
+    options: resolveAIOptions(options, {
+      temperature: 0.3,
+      num_predict: 2000,
+      top_p: 0.9,
+      repeat_penalty: 1.1
+    }),
     process: async (stream, original) => {
-      let revised = '';
-      process.stdout.write('\x1b[32m');
-      for await (const chunk of stream) {
-        if (chunk.message?.content) {
-          process.stdout.write(chunk.message.content);
-          revised += chunk.message.content;
-        }
-      }
-      process.stdout.write('\x1b[0m\n');
-      reprintReplPrompt();
-      
-      revised = revised.replace(/^```[\w]*\n/, '').replace(/\n```$/, '').replace(/^["']|["']$/g, '').trim();
+      let revised = await processStream(stream);
+      revised = cleanAIResponse(revised);
       if (!revised) { console.warn('Revision empty; returning original'); return original; }
       const ratio = revised.length / original.length;
       if (ratio < 0.2 || ratio > 5) { console.warn('Revision length off; returning original'); return original; }
@@ -285,13 +326,14 @@ export async function refactor(input, options = {}) {
     error: 'No code to refactor',
     spinner: 'Refactoring',
     messages: code => [{ role: 'system', content: systemPrompt }, { role: 'user', content: code }],
-    options: {
-      temperature: options.temperature ?? globalThis.hlvm?.env?.get?.("ai.temperature") ?? 0.2,
-      num_predict: globalThis.hlvm?.env?.get?.("ai.max_tokens") ?? 4000,
-      top_p: 0.95, repeat_penalty: 1.0
-    },
+    options: resolveAIOptions(options, {
+      temperature: 0.2,
+      num_predict: 4000,
+      top_p: 0.95,
+      repeat_penalty: 1.0
+    }),
     process: async (response, original) => {
-      let out = (response.message?.content || original).replace(/^```[\w]*\n/, '').replace(/\n```$/, '').trim();
+      let out = cleanAIResponse(response.message?.content || original);
       if (!out) { console.warn('Refactoring empty; returning original'); return original; }
       return out;
     }
@@ -317,7 +359,7 @@ function trimHistory(messages, maxTokens = MAX_CONTEXT_TOKENS) {
 
 export async function chat(input, options = {}) {
   // Special handling for chat history
-  const question = input || await globalThis.hlvm.core.io.clipboard.read();
+  const question = await getInputWithFallback(input);
   if (!question?.trim()) throw new Error('No question to ask');
   
   const model = options.model || globalThis.hlvm?.env?.get?.("ai.model") || getDefaultModel();
@@ -356,23 +398,16 @@ export async function chat(input, options = {}) {
     spinner: options.stream !== false ? 'Generating' : null,
     messages: () => messages,  // Already built above
     stream: options.stream !== false,
-    options: {
-      temperature: options.temperature ?? globalThis.hlvm?.env?.get?.("ai.temperature") ?? 0.7,
-      num_predict: globalThis.hlvm?.env?.get?.("ai.max_tokens") ?? 2000,
-      num_ctx: 8192, top_p: 0.95, repeat_penalty: 1.1
-    },
+    options: resolveAIOptions(options, {
+      temperature: 0.7,
+      num_predict: 2000,
+      top_p: 0.95,
+      repeat_penalty: 1.1,
+      extra: { num_ctx: 8192 }
+    }),
     process: async (response) => {
       if (options.stream !== false) {
-        let answer = '';
-        process.stdout.write('\x1b[32m');
-        for await (const chunk of response) {
-          if (chunk.message?.content) { 
-            process.stdout.write(chunk.message.content); 
-            answer += chunk.message.content; 
-          }
-        }
-        process.stdout.write('\x1b[0m\n');
-        reprintReplPrompt();
+        let answer = await processStream(response);
         if (!options.stateless) chatHistory.push({ role: 'assistant', content: answer.trim() });
         return answer.trim();
       } else {
@@ -560,11 +595,7 @@ Output the raw shell command only:`;
     let script = response.message?.content || '';
     
     // Clean up AI output
-    script = script
-      .replace(/^```[\w]*\n?/gm, '')
-      .replace(/\n?```$/gm, '')
-      .replace(/^["']|["']$/g, '')
-      .trim();
+    script = cleanAIResponse(script);
     if (script.startsWith('`') && script.endsWith('`')) script = script.slice(1, -1);
 
     // Fix unbalanced quotes
@@ -682,8 +713,7 @@ Output the raw shell command only:`;
     }
   } catch (error) {
     console.error('❌ Error:', error.message);
-    if (error.message.includes('fetch failed') || error.message.includes('ECONNREFUSED'))
-      console.error('Ollama service is not running. Start it with: hlvm ollama serve');
+    handleOllamaError(error);
     process.stdout.write("\n> "); // Show prompt after error
     return null;
   }

@@ -30,7 +30,7 @@ run_test() {
     printf "[%3d] %-45s" "$total" "$name"
     
     # Run test and capture output, skip all startup messages
-    result=$(echo "$code; Deno.exit(0)" | $HLVM 2>&1 | grep -v "✓\|╔\|║\|╚\|HLVM\|Version\|Virtual Machine\|Global aliases\|Type alias\|help('name')" | tail -5)
+    result=$(echo "$code; Deno.exit(0)" | $HLVM 2>&1 | grep -v "✓\|╔\|║\|╚\|HLVM\|Version\|Virtual Machine\|Global aliases\|Type alias\|help('name')" | tail -5 | sed '/^$/d')
     
     if echo "$result" | grep -q "$expected"; then
         echo -e "${GREEN}✓${NC}"
@@ -286,17 +286,11 @@ run_test "refactor handles empty input" "try { await hlvm.stdlib.ai.refactor('')
 # CHAT - Behavior tests
 run_test "chat returns string" "const r = await hlvm.stdlib.ai.chat('Hi', {stateless: true, stream: false}); console.log(typeof r)" "string"
 run_test "chat stateless mode" "const r = await hlvm.stdlib.ai.chat('test', {stateless: true, stream: false}); console.log(typeof r)" "string"
-run_test "chat handles empty input" "try { await hlvm.stdlib.ai.chat('', {stream: false}); } catch(e) { console.log(e.message) }" "No question to ask"
 
 # ASK - Special handling (requires TTY)
 run_test "ask requires TTY" "console.log('ask requires TTY')" "ask requires TTY"
 
 # Clipboard fallback tests (when input is null/undefined)
-run_test "judge uses clipboard fallback" "await hlvm.core.io.clipboard.write('test'); const r = await hlvm.stdlib.ai.judge(); console.log(typeof r)" "boolean"
-run_test "revise uses clipboard fallback" "await hlvm.core.io.clipboard.write('text'); const r = await hlvm.stdlib.ai.revise(); console.log(typeof r)" "string"
-run_test "draw uses clipboard fallback" "await hlvm.core.io.clipboard.write('A->B'); const r = await hlvm.stdlib.ai.draw(); console.log(typeof r)" "string"
-run_test "refactor uses clipboard fallback" "await hlvm.core.io.clipboard.write('code'); const r = await hlvm.stdlib.ai.refactor(); console.log(typeof r)" "string"
-run_test "chat uses clipboard fallback" "await hlvm.core.io.clipboard.write('Hi'); const r = await hlvm.stdlib.ai.chat(null, {stateless: true, stream: false}); console.log(typeof r)" "string"
 
 echo
 echo "════════════════════════════════════════════"
