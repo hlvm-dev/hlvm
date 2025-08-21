@@ -4,6 +4,10 @@
 
 import { embeddedStdlib, embeddedInit, embeddedBridge, EMBEDDED_MODEL } from "./embedded-stdlib.ts";
 import { HLVM_VERSION } from "./version.ts";
+import { initializeOSSecurity, cleanExtractedBinary } from "./os-utils.ts";
+
+// Initialize OS-specific security settings on startup
+await initializeOSSecurity();
 
 // Configuration constants
 class Config {
@@ -58,6 +62,10 @@ class BinaryExtractor {
       await Deno.writeFile(tempPath, binaryBytes);
       await Deno.chmod(tempPath, 0o755);
       await Deno.rename(tempPath, targetPath);
+      
+      // Clean extracted binary from OS security restrictions
+      await cleanExtractedBinary(targetPath);
+      
       return targetPath;
     } catch {
       return null;

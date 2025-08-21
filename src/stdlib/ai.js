@@ -115,15 +115,74 @@ async function ensureModel(modelName) {
       console.log("\n╔════════════════════════════════════════════════════════════════╗");
       console.log("║  🤖 Setting up AI capabilities (one-time download)              ║");
       console.log("║                                                                  ║");
-      console.log(`║  Downloading model: ${model.padEnd(40)}  ║`);
+      console.log(`║  Model: ${model.padEnd(54)} ║`);
       console.log("║  This will take a few minutes but only happens once.            ║");
       console.log("╚════════════════════════════════════════════════════════════════╝\n");
-      console.log("  ⏳ Downloading... (this may take 2-5 minutes)");
-      console.log("  📦 Model size: ~1GB");
 
       try {
-        await globalThis.hlvm.core.ai.ollama.pull({ name: model, stream: false });
-        console.log("\n✅ Model downloaded successfully!");
+        // Use streaming to show real-time progress
+        const pullStream = await globalThis.hlvm.core.ai.ollama.pull({ name: model, stream: true });
+        
+        let lastStatus = '';
+        let lastPercent = 0;
+        
+        for await (const progress of pullStream) {
+          if (progress.status) {
+            // Clear previous line and show new status
+            if (lastStatus !== progress.status) {
+              if (lastStatus) process.stdout.write(TERMINAL.CLEAR_LINE + TERMINAL.CURSOR_START);
+              lastStatus = progress.status;
+              
+              // Format status message
+              if (progress.status === 'pulling manifest') {
+                process.stdout.write(`  📋 Pulling manifest...`);
+              } else if (progress.status.includes('pulling')) {
+                const digest = progress.digest ? progress.digest.substring(0, 12) : '';
+                if (progress.completed && progress.total) {
+                  const percent = Math.round((progress.completed / progress.total) * 100);
+                  const mb = Math.round(progress.completed / 1048576);
+                  const totalMb = Math.round(progress.total / 1048576);
+                  
+                  // Create progress bar
+                  const barWidth = 30;
+                  const filled = Math.round((percent / 100) * barWidth);
+                  const bar = '█'.repeat(filled) + '░'.repeat(barWidth - filled);
+                  
+                  process.stdout.write(`  📦 Downloading: [${bar}] ${percent}% (${mb}/${totalMb} MB)`);
+                  lastPercent = percent;
+                } else {
+                  process.stdout.write(`  📦 ${progress.status}${digest ? ` ${digest}` : ''}...`);
+                }
+              } else if (progress.status === 'verifying sha256 digest') {
+                process.stdout.write(`  🔍 Verifying integrity...`);
+              } else if (progress.status === 'writing manifest') {
+                process.stdout.write(`  💾 Finalizing installation...`);
+              } else if (progress.status === 'success') {
+                process.stdout.write(TERMINAL.CLEAR_LINE + TERMINAL.CURSOR_START);
+                console.log("  ✅ Model downloaded successfully!");
+              } else {
+                process.stdout.write(`  ⏳ ${progress.status}...`);
+              }
+            } else if (progress.completed && progress.total) {
+              // Update progress on same line
+              const percent = Math.round((progress.completed / progress.total) * 100);
+              if (percent !== lastPercent) {
+                const mb = Math.round(progress.completed / 1048576);
+                const totalMb = Math.round(progress.total / 1048576);
+                const barWidth = 30;
+                const filled = Math.round((percent / 100) * barWidth);
+                const bar = '█'.repeat(filled) + '░'.repeat(barWidth - filled);
+                
+                process.stdout.write(TERMINAL.CLEAR_LINE + TERMINAL.CURSOR_START);
+                process.stdout.write(`  📦 Downloading: [${bar}] ${percent}% (${mb}/${totalMb} MB)`);
+                lastPercent = percent;
+              }
+            }
+          }
+        }
+        
+        // Ensure we end with a newline
+        console.log("");
       } catch (e) {
         console.error("\n❌ Download failed:", e.message);
         throw e;
