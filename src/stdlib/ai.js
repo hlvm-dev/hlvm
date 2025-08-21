@@ -2,50 +2,68 @@
 // HLVM Stdlib AI - High-level AI functions
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Minimal terminal UI helpers
-const HLVM_PURPLE = '\x1b[35m';
-const HLVM_BRIGHT_PURPLE = '\x1b[95m';
-const RESET = '\x1b[0m';
-const CLEAR_LINE = '\x1b[2K';
-const CURSOR_START = '\x1b[0G';
-const HIDE_CURSOR = '\x1b[?25l';
-const SHOW_CURSOR = '\x1b[?25h';
-const YELLOW = '\x1b[33m';
+// Constants
+const SPINNER_INTERVAL = 80;
+const CONTEXT_WARNING_THRESHOLD = 80;
+const CONTEXT_CRITICAL_THRESHOLD = 95;
+const TOKEN_ESTIMATE_DIVISOR = 4;
+const MAX_CONTEXT_TOKENS = 6000;
+const MODEL_STARTUP_DELAY = 2000;
+const DOWNLOAD_WAIT_INTERVAL = 1000;
+const CONFIRMATION_TIMEOUT = 30000;
+const PREVIEW_DIVIDER_LENGTH = 50;
+
+// Terminal UI helpers
+const COLORS = {
+  PURPLE: '\x1b[35m',
+  BRIGHT_PURPLE: '\x1b[95m',
+  GREEN: '\x1b[32m',
+  RED: '\x1b[91m',
+  YELLOW: '\x1b[33m',
+  GRAY: '\x1b[90m',
+  RESET: '\x1b[0m'
+};
+
+const TERMINAL = {
+  CLEAR_LINE: '\x1b[2K',
+  CURSOR_START: '\x1b[0G',
+  HIDE_CURSOR: '\x1b[?25l',
+  SHOW_CURSOR: '\x1b[?25h'
+};
 
 function startComputing(message = 'Computing') {
   const frames = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
   let i = 0, interval, first = true;
-  try { process.stdout.write(HIDE_CURSOR); } catch {}
+  try { process.stdout.write(TERMINAL.HIDE_CURSOR); } catch {}
   const render = () => {
-    const prefix = first ? '\n' : (CLEAR_LINE + CURSOR_START);  // Only one \n, not two
+    const prefix = first ? '\n' : (TERMINAL.CLEAR_LINE + TERMINAL.CURSOR_START);
     first = false;
     try {
-      process.stdout.write(`${prefix}  ${HLVM_PURPLE}${frames[i]}${RESET}  ${message}...`);
+      process.stdout.write(`${prefix}  ${COLORS.PURPLE}${frames[i]}${COLORS.RESET}  ${message}...`);
     } catch {}
     i = (i + 1) % frames.length;
   };
   render();
-  interval = setInterval(render, 80);
+  interval = setInterval(render, SPINNER_INTERVAL);
   return {
     update: (m) => { message = m; },
     stop: () => {
       clearInterval(interval);
       try {
-        process.stdout.write(CLEAR_LINE + CURSOR_START);
-        process.stdout.write(SHOW_CURSOR + '\n');
+        process.stdout.write(TERMINAL.CLEAR_LINE + TERMINAL.CURSOR_START);
+        process.stdout.write(TERMINAL.SHOW_CURSOR + '\n');
       } catch {}
     }
   };
 }
 
 function showContextUsage(percentage, model = null) {
-  const warning = 80, critical = 95;
-  let color = HLVM_PURPLE, icon = '○';
-  if (percentage >= critical) { color = '\x1b[91m'; icon = '●'; }
-  else if (percentage >= warning) { color = YELLOW; icon = '◉'; }
+  let color = COLORS.PURPLE, icon = '○';
+  if (percentage >= CONTEXT_CRITICAL_THRESHOLD) { color = COLORS.RED; icon = '●'; }
+  else if (percentage >= CONTEXT_WARNING_THRESHOLD) { color = COLORS.YELLOW; icon = '◉'; }
   const msg = model ? `Approaching ${model} usage limit : ${percentage}% context used`
                     : `Context usage: ${percentage}%`;
-  try { process.stdout.write(`\n${color}${icon} ${msg}${RESET}\n`); } catch {}
+  try { process.stdout.write(`\n${color}${icon} ${msg}${COLORS.RESET}\n`); } catch {}
 }
 
 function getDefaultModel() {
@@ -55,7 +73,7 @@ function getDefaultModel() {
 function reprintReplPrompt() {
   try {
     if (typeof process !== 'undefined' && process.stdout && typeof process.stdout.write === 'function') {
-      process.stdout.write('\n\x1b[90mDone. Press Enter to continue.\x1b[0m\n');
+      process.stdout.write(`\n${COLORS.GRAY}Done. Press Enter to continue.${COLORS.RESET}\n`);
     }
   } catch {}
 }
@@ -71,7 +89,7 @@ async function ensureModel(modelName) {
   if (modelChecked && modelAvailable) return true;
   if (downloadInProgress) {
     console.log("⏳ Model download already in progress...");
-    while (downloadInProgress) await new Promise(r => setTimeout(r, 1000));
+    while (downloadInProgress) await new Promise(r => setTimeout(r, DOWNLOAD_WAIT_INTERVAL));
     return modelAvailable;
   }
 
@@ -80,7 +98,7 @@ async function ensureModel(modelName) {
     if (!ollamaCheck) {
       console.log("\n🚀 Starting AI service...");
       await globalThis.hlvm.core.system.exec(["./resources/ollama", "serve"], { background: true });
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, MODEL_STARTUP_DELAY));
     }
 
     const models = await globalThis.hlvm.core.ai.ollama.list();
@@ -145,14 +163,14 @@ function cleanAIResponse(response) {
 // Process streaming response with colored output
 async function processStream(stream) {
   let result = '';
-  process.stdout.write('\x1b[32m'); // Green
+  process.stdout.write(COLORS.GREEN);
   for await (const chunk of stream) {
     if (chunk.message?.content) {
       process.stdout.write(chunk.message.content);
       result += chunk.message.content;
     }
   }
-  process.stdout.write('\x1b[0m\n'); // Reset
+  process.stdout.write(`${COLORS.RESET}\n`);
   reprintReplPrompt();
   return result;
 }
@@ -174,6 +192,24 @@ async function getInputWithFallback(input) {
   // Only fallback to clipboard if input is undefined
   if (input !== undefined) return input;
   return await globalThis.hlvm.core.io.clipboard.read();
+}
+
+// Handle macOS permission errors consistently
+function handleMacOSPermissionError(stderr) {
+  if (!stderr || globalThis.hlvm.core.system.os !== 'darwin') return;
+  
+  const permissionPatterns = [
+    /Operation not permitted/i,
+    /not allowed to send Apple events/i,
+    /Automation.*not allowed/i
+  ];
+  
+  if (permissionPatterns.some(pattern => pattern.test(stderr))) {
+    console.log('\n🔐 macOS may have blocked this action.');
+    console.log('   Check System Settings → Privacy & Security (Automation / Accessibility / Full Disk Access)');
+    console.log('   Quick open:');
+    console.log('   open "x-apple.systempreferences:com.apple.preference.security?Privacy"');
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -341,8 +377,7 @@ export async function refactor(input, options = {}) {
 }
 
 const chatHistory = [];
-const MAX_CONTEXT_TOKENS = 6000;
-const estimateTokens = (t) => Math.ceil((t || '').length / 4);
+const estimateTokens = (t) => Math.ceil((t || '').length / TOKEN_ESTIMATE_DIVISOR);
 const calculateHistoryTokens = (msgs) => msgs.reduce((acc, m) => acc + estimateTokens(m.content || ''), 0);
 function trimHistory(messages, maxTokens = MAX_CONTEXT_TOKENS) {
   if (!messages.length) return messages;
@@ -386,9 +421,9 @@ export async function chat(input, options = {}) {
   }
 
   if (options.debug) {
-    console.log('\x1b[90m[DEBUG] Sending messages:\x1b[0m');
-    messages.forEach((m,i) => console.log(`\x1b[90m  [${i}] ${m.role}: ${(m.content||'').slice(0,50)}...\x1b[0m`));
-    console.log(`\x1b[90m[DEBUG] Total tokens: ~${calculateHistoryTokens(messages)}\x1b[0m`);
+    console.log(`${COLORS.GRAY}[DEBUG] Sending messages:${COLORS.RESET}`);
+    messages.forEach((m,i) => console.log(`${COLORS.GRAY}  [${i}] ${m.role}: ${(m.content||'').slice(0,50)}...${COLORS.RESET}`));
+    console.log(`${COLORS.GRAY}[DEBUG] Total tokens: ~${calculateHistoryTokens(messages)}${COLORS.RESET}`);
   }
 
   // Use request but with pre-built messages
@@ -424,106 +459,9 @@ export async function chat(input, options = {}) {
 // ASK: natural language → command + confirm + exec
 // NEW: /dev/tty single-keypress Y/N, real ESC, confirm:false skip, verbose logs
 
-const ASK_DEBUG = !!(globalThis.hlvm?.env?.get?.("ASK_DEBUG") || (typeof Deno !== 'undefined' && Deno.env?.get?.("ASK_DEBUG")));
-const logAsk = (...args) => { if (ASK_DEBUG) console.log("[ASK]", ...args); };
-const now = () => new Date().toISOString();
 
-async function withTTY(fn) {
-  try {
-    const tty = await Deno.open("/dev/tty", { read: true, write: true });
-    try { return await fn(tty); }
-    finally { try { tty.close(); } catch {} }
-  } catch (e) {
-    logAsk("No /dev/tty:", e?.message || e);
-    return await fn(null);
-  }
-}
 
-async function writeTTY(tty, text) {
-  if (!tty) return;
-  const enc = new TextEncoder();
-  await tty.write(enc.encode(text));
-}
 
-async function readSingleKeyRaw(tty, opts = { echo: false }) {
-  if (!tty) return null;
-  const rid = tty.rid;
-  const buf = new Uint8Array(1);
-  try {
-    Deno.setRaw(rid, true);
-    while (true) {
-      const n = await tty.read(buf);
-      if (!n || n <= 0) return null;
-      if (opts.echo) await tty.write(buf);
-      return buf[0];
-    }
-  } finally {
-    try { Deno.setRaw(rid, false); } catch {}
-  }
-}
-
-async function confirmSingleKeyTTY(message = "Execute? (y/n): ") {
-  // Check if we're in REPL environment
-  const inREPL = globalThis.Deno?.isatty?.(0) && !globalThis.hlvm?.env?.get?.("HLVM_NON_INTERACTIVE");
-  
-  if (inREPL) {
-    // In REPL, use simple stdin reading with prompt display
-    try {
-      const encoder = new TextEncoder();
-      const decoder = new TextDecoder();
-      
-      // Show the prompt
-      await Deno.stdout.write(encoder.encode(`\n${message}`));
-      
-      // Read user input (requires Enter key)
-      const buffer = new Uint8Array(100);
-      const n = await Deno.stdin.read(buffer);
-      
-      if (n) {
-        const input = decoder.decode(buffer.subarray(0, n)).trim().toLowerCase();
-        if (input === 'y' || input === 'yes') {
-          console.log("✓ Proceeding...");
-          return true;
-        } else if (input === 'n' || input === 'no') {
-          console.log("✗ Cancelled");
-          return false;
-        } else {
-          console.log("Invalid response. Treating as 'no'.");
-          return false;
-        }
-      }
-      return false;
-    } catch (e) {
-      logAsk("REPL prompt failed:", e.message);
-      // Fallback to auto-proceed
-      console.log("⚠️  Could not read response — auto-proceeding");
-      return true;
-    }
-  } else {
-    // Non-interactive or piped input
-    console.log("⚠️  Non-interactive environment — auto-proceeding");
-    return true;
-  }
-}
-
-function makeEscWatcher() {
-  let stopFn = () => {};
-  const done = new Promise((resolve) => {
-    withTTY(async (tty) => {
-      if (!tty) { logAsk("ESC watcher disabled (no tty)"); stopFn = () => resolve("stopped"); return; }
-      logAsk("ESC watcher started");
-      Deno.setRaw(tty.rid, true);
-      stopFn = () => { try { Deno.setRaw(tty.rid, false); } catch {} try { tty.close(); } catch {} resolve("stopped"); };
-      const buf = new Uint8Array(1);
-      while (true) {
-        const n = await tty.read(buf);
-        if (!n || n <= 0) { resolve("closed"); return; }
-        if (buf[0] === 27) { logAsk("ESC pressed"); try { Deno.setRaw(tty.rid, false); } catch {} try { tty.close(); } catch {} resolve("esc"); return; }
-      }
-    });
-  });
-  return { done, stop: stopFn };
-}
 
 export async function judge(statement, options = {}) {
   const systemPrompt = `You are a binary truth evaluator. Analyze the given statement and respond with ONLY "true" or "false".
@@ -609,19 +547,18 @@ Output the raw shell command only:`;
 
     // Preview
     console.log('\n📋 Will execute:');
-    console.log('─'.repeat(50));
-    console.log('\x1b[32m' + script + '\x1b[0m');
-    console.log('─'.repeat(50));
+    console.log('─'.repeat(PREVIEW_DIVIDER_LENGTH));
+    console.log(COLORS.GREEN + script + COLORS.RESET);
+    console.log('─'.repeat(PREVIEW_DIVIDER_LENGTH));
 
     // Confirmation or skip
     if (confirm === false) {
-      logAsk("confirm=false (skip prompts)");
     } else {
       // Clean UI with emoji and clear instructions
       console.log("\n  ❓ Execute this command?");
       console.log("");
-      console.log("     \x1b[32m→ y\x1b[0m  = Yes, execute");
-      console.log("     \x1b[31m→ n\x1b[0m  = No, cancel");
+      console.log(`     ${COLORS.GREEN}→ y${COLORS.RESET}  = Yes, execute`);
+      console.log(`     ${COLORS.RED}→ n${COLORS.RESET}  = No, cancel`);
       console.log("");
       process.stdout.write("> "); // Show prompt to indicate waiting for input
       
@@ -651,7 +588,7 @@ Output the raw shell command only:`;
       
       // Wait for response (max 30 seconds)
       const startTime = Date.now();
-      while (!responded && (Date.now() - startTime < 30000)) {
+      while (!responded && (Date.now() - startTime < CONFIRMATION_TIMEOUT)) {
         await new Promise(r => setTimeout(r, 100));
       }
       
@@ -692,15 +629,7 @@ Output the raw shell command only:`;
         if (result.stderr) console.error(result.stderr);
 
         // Permission hints on macOS
-        if (result.stderr && globalThis.hlvm.core.system.os === 'darwin' && (
-             /Operation not permitted/i.test(result.stderr) ||
-             /not allowed to send Apple events/i.test(result.stderr) ||
-             /Automation.*not allowed/i.test(result.stderr))) {
-          console.log('\n🔐 macOS may have blocked this action.');
-          console.log('   Check System Settings → Privacy & Security (Automation / Accessibility / Full Disk Access)');
-          console.log('   Quick open:');
-          console.log('   open "x-apple.systempreferences:com.apple.preference.security?Privacy"');
-        }
+        handleMacOSPermissionError(result.stderr);
       }
       if (result?.code !== 0) {
         process.stdout.write("\n> "); // Show prompt after error

@@ -1,7 +1,7 @@
 // Mouse module - Cross-platform mouse automation
 
-import { platformExecutor, appleScript, powerShell, linuxTools } from "../core/command.js";
-import * as platform from "../core/platform.js";
+import { platformExecutor, powerShell, linuxTools } from "../core/command.js";
+import { isDarwin, isWindows } from "../core/platform.js";
 
 /**
  * Move mouse cursor to specified position
@@ -10,7 +10,7 @@ import * as platform from "../core/platform.js";
  * @returns {Promise<void>}
  */
 export async function move(x, y) {
-  if (platform.isDarwin) {
+  if (isDarwin) {
     try {
       await platformExecutor.executeText("cliclick", [`m:${x},${y}`]);
     } catch {
@@ -20,7 +20,7 @@ import Quartz
 Quartz.CGWarpMouseCursorPosition((${x}, ${y}))`;
       await platformExecutor.executeText("python3", ["-c", script]);
     }
-  } else if (platform.isWindows) {
+  } else if (isWindows) {
     await powerShell.run(`
 [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point(${x}, ${y})
     `, ['forms', 'drawing']);
@@ -46,7 +46,7 @@ export async function click(x = null, y = null, button = "left") {
     await move(x, y);
   }
   
-  if (platform.isDarwin) {
+  if (isDarwin) {
     const buttonMap = { "left": "c", "right": "rc", "middle": "mc" };
     const args = x !== null && y !== null 
       ? [`${buttonMap[button]}:${x},${y}`]
@@ -58,7 +58,7 @@ export async function click(x = null, y = null, button = "left") {
       // Fallback to Python/Quartz
       await clickWithQuartz(x, y, button);
     }
-  } else if (platform.isWindows) {
+  } else if (isWindows) {
     await clickWithWindows(x, y, button);
   } else {
     // Linux
@@ -86,7 +86,7 @@ export async function click(x = null, y = null, button = "left") {
 export async function position() {
   let result;
   
-  if (platform.isDarwin) {
+  if (isDarwin) {
     try {
       result = await platformExecutor.executeText("cliclick", ["p"]);
     } catch {
@@ -97,7 +97,7 @@ pos = Quartz.NSEvent.mouseLocation()
 print(f"{int(pos.x)},{int(pos.y)}")`;
       result = await platformExecutor.executeText("python3", ["-c", script]);
     }
-  } else if (platform.isWindows) {
+  } else if (isWindows) {
     result = await powerShell.run(`
 $pos = [System.Windows.Forms.Cursor]::Position
 Write-Host "$($pos.X),$($pos.Y)"
@@ -156,7 +156,7 @@ export async function doubleClick(x = null, y = null) {
  * @returns {Promise<void>}
  */
 export async function drag(fromX, fromY, toX, toY) {
-  if (platform.isDarwin) {
+  if (isDarwin) {
     try {
       await platformExecutor.executeText("cliclick", [`dd:${fromX},${fromY}`, `du:${toX},${toY}`]);
     } catch {
@@ -166,7 +166,7 @@ export async function drag(fromX, fromY, toX, toY) {
       await move(toX, toY);
       await click(toX, toY);
     }
-  } else if (platform.isWindows) {
+  } else if (isWindows) {
     await powerShell.run(`
 Add-Type @"
   using System;

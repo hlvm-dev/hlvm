@@ -1,8 +1,7 @@
 // Keyboard module - Cross-platform keyboard automation with unified array format
 // Array format: ["cmd", "shift", "a"] where last element is the key, rest are modifiers
 
-import * as platform from "../core/platform.js";
-import { escapeKeyboard, powershell, linuxTool, PS, ERRORS } from "../core/platform.js";
+import { isDarwin, isWindows, isLinux, escapeKeyboard, powershell, linuxTool, PS, ERRORS } from "../core/platform.js";
 
 // Global keyboard event listeners storage
 const keyListeners = new Map();
@@ -10,7 +9,7 @@ const keyListeners = new Map();
 export async function type(text) {
   const escapedText = escapeKeyboard(text);
   
-  if (platform.isDarwin) {
+  if (isDarwin) {
     // macOS: osascript (built-in)
     const script = `tell application "System Events" to keystroke "${escapedText}"`;
     const result = await new Deno.Command("osascript", { args: ["-e", script] }).output();
@@ -22,7 +21,7 @@ export async function type(text) {
       throw new Error(`Keyboard type failed: ${error}`);
     }
     
-  } else if (platform.isWindows) {
+  } else if (isWindows) {
     // Windows: PowerShell SendKeys (built-in)
     const script = `
       ${PS.forms}
@@ -166,7 +165,7 @@ export async function press(keys) {
     linux: key
   };
   
-  if (platform.isDarwin) {
+  if (isDarwin) {
     // macOS: osascript with modifiers
     const mods = [];
     if (modifiers.includes('cmd')) mods.push("command down");
@@ -188,7 +187,7 @@ export async function press(keys) {
       throw new Error(`Keyboard press failed: ${error}`);
     }
     
-  } else if (platform.isWindows) {
+  } else if (isWindows) {
     // Windows: PowerShell SendKeys with modifiers
     let keysStr = "";
     if (modifiers.includes('ctrl')) keysStr += "^";
@@ -232,10 +231,10 @@ export function onKeyPress(keys, callback) {
   // Platform-specific global hotkey registration would go here
   // For now, this is a stub that stores the callbacks for future implementation
   
-  if (platform.isDarwin) {
+  if (isDarwin) {
     // TODO: Use native macOS APIs or a tool like hammerspoon
     console.warn('Global keyboard shortcuts not yet implemented. Callback registered for future use.');
-  } else if (platform.isWindows) {
+  } else if (isWindows) {
     // TODO: Use Windows hooks or AutoHotkey
     console.warn('Global keyboard shortcuts not yet implemented. Callback registered for future use.');
   } else {

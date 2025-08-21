@@ -1,9 +1,7 @@
 // Context Module - Captures current system state for developer productivity
 // Provides easy access to clipboard, selection, and screen content
 
-import * as clipboardModule from "../io/clipboard.js";
-import * as screenModule from "./screen.js";
-import * as system from "../core/system.js";
+import { exec } from "../core/system.js";
 
 // Helper to get selected text
 // Uses multiple strategies depending on platform
@@ -13,7 +11,7 @@ async function getSelectedText() {
     if (Deno.build.os === "darwin") {
       // On macOS, try using osascript to get selection from frontmost app
       try {
-        const result = await system.exec(
+        const result = await exec(
           `osascript -e 'tell application "System Events" to keystroke "c" using command down' && pbpaste`
         );
         if (result.success && result.stdout.trim()) {
@@ -25,7 +23,7 @@ async function getSelectedText() {
     } else if (Deno.build.os === "linux") {
       // On Linux, try xclip or xsel for primary selection
       try {
-        const result = await system.exec("xclip -o -selection primary 2>/dev/null || xsel -o -p 2>/dev/null");
+        const result = await exec("xclip -o -selection primary 2>/dev/null || xsel -o -p 2>/dev/null");
         if (result.success && result.stdout.trim()) {
           return result.stdout.trim();
         }
@@ -47,36 +45,6 @@ async function getSelectedText() {
 }
 
 // Extract text from image using OCR
-// This is a placeholder - real implementation would use Vision framework on macOS,
-// Tesseract on Linux, or Windows OCR APIs
-async function extractTextFromImage(imageData) {
-  try {
-    if (Deno.build.os === "darwin") {
-      // Save image temporarily and use macOS Vision framework via shortcuts or swift
-      const tempPath = `/tmp/hlvm_ocr_${Date.now()}.png`;
-      await Deno.writeFile(tempPath, imageData);
-      
-      // Try using shortcuts cli if available
-      const result = await system.exec(
-        `shortcuts run "Extract Text from Image" -i "${tempPath}" 2>/dev/null || echo ""`
-      );
-      
-      // Clean up temp file
-      try { await Deno.remove(tempPath); } catch {}
-      
-      if (result.success && result.stdout.trim()) {
-        return result.stdout.trim();
-      }
-    }
-    
-    // For now, return placeholder for other platforms
-    // Real implementation would integrate with Tesseract or other OCR
-    return "[OCR not available on this platform yet]";
-  } catch (error) {
-    console.error("OCR failed:", error.message);
-    return "";
-  }
-}
 
 // Context namespace - provides current state
 export const context = {

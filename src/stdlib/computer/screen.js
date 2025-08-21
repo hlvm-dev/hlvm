@@ -1,17 +1,16 @@
 // Screen module - Cross-platform screen capture
 
-import * as platform from "../core/platform.js";
-import { decode } from "../core/platform.js";
+import { isDarwin, isWindows, tempDir, pathSep, decode } from "../core/platform.js";
 
 export async function capture(output = null, options = {}) {
   // Use platform-specific temp file if no output specified
   if (!output) {
-    const tempDir = platform.tempDir();
+    const tempDirectory = tempDir();
     const timestamp = Date.now();
-    output = `${tempDir}${platform.pathSep}screenshot-${timestamp}.png`;
+    output = `${tempDirectory}${pathSep}screenshot-${timestamp}.png`;
   }
   
-  if (platform.isDarwin) {
+  if (isDarwin) {
     // macOS: screencapture (built-in)
     const args = ["-x"]; // No sound
     
@@ -33,7 +32,7 @@ export async function capture(output = null, options = {}) {
     const { success } = await new Deno.Command("screencapture", { args }).output();
     if (!success) throw new Error("Screenshot failed");
     
-  } else if (platform.isWindows) {
+  } else if (isWindows) {
     // Windows: PowerShell screenshot (built-in)
     const script = `
       Add-Type -AssemblyName System.Windows.Forms
@@ -106,7 +105,7 @@ export async function capture(output = null, options = {}) {
 
 // Get screen dimensions (cross-platform)
 export async function getScreenSize() {
-  if (platform.isDarwin) {
+  if (isDarwin) {
     // macOS: Use system_profiler
     const { stdout } = await new Deno.Command("system_profiler", {
       args: ["SPDisplaysDataType", "-json"]
@@ -124,7 +123,7 @@ export async function getScreenSize() {
       }
     } catch {}
     
-  } else if (platform.isWindows) {
+  } else if (isWindows) {
     // Windows: Use PowerShell
     const script = `
       Add-Type -AssemblyName System.Windows.Forms

@@ -1,7 +1,6 @@
 // Notification module - Cross-platform UI dialogs and notifications
 
-import * as platform from "../core/platform.js";
-import { escapeShell, decode, powershell, PS, ERRORS } from "../core/platform.js";
+import { isDarwin, isWindows, escapeShell, decode, powershell, PS, ERRORS } from "../core/platform.js";
 
 // DRY: Generic Linux dialog handler
 async function linuxDialog(type, message, title, defaultValue = "") {

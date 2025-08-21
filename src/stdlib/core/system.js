@@ -1,7 +1,6 @@
 // System module - Cross-platform system utilities
 
-import * as platform from "./platform.js";
-import { decode } from "./platform.js";
+import { shell, decode } from "./platform.js";
 
 export async function hostname() {
   try {
@@ -14,9 +13,9 @@ export async function hostname() {
 }
 
 export async function exec(cmd) {
-  const shell = platform.shell();
-  const p = new Deno.Command(shell[0], { 
-    args: [...shell.slice(1), cmd] 
+  const shellCmd = shell();
+  const p = new Deno.Command(shellCmd[0], { 
+    args: [...shellCmd.slice(1), cmd] 
   });
   const { stdout, stderr, code } = await p.output();
   return {

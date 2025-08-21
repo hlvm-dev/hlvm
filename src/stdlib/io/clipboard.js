@@ -1,6 +1,6 @@
 // Clipboard module - Cross-platform clipboard operations
 
-import * as platform from "../core/platform.js";
+import { isDarwin, isWindows } from "../core/platform.js";
 import { executor, powerShell, linuxTools } from "../core/command.js";
 
 /**
@@ -11,10 +11,10 @@ import { executor, powerShell, linuxTools } from "../core/command.js";
  * // → "Hello from clipboard"
  */
 export async function read() {
-  if (platform.isDarwin) {
+  if (isDarwin) {
     return await executor.executeText("pbpaste");
     
-  } else if (platform.isWindows) {
+  } else if (isWindows) {
     const result = await powerShell.run("Get-Clipboard");
     return result.replace(/\r\n$/, '');
     
@@ -37,10 +37,10 @@ export async function read() {
  * // → Text copied to clipboard
  */
 export async function write(text) {
-  if (platform.isDarwin) {
+  if (isDarwin) {
     await writeToCommand("pbcopy", [], text);
     
-  } else if (platform.isWindows) {
+  } else if (isWindows) {
     // Escape quotes for PowerShell
     const escaped = text.replace(/"/g, '`"').replace(/\$/g, '`$');
     await powerShell.run(`Set-Clipboard -Value "${escaped}"`);
@@ -92,7 +92,7 @@ async function writeToCommand(cmd, args, text) {
  */
 export async function isAvailable() {
   try {
-    if (platform.isDarwin || platform.isWindows) {
+    if (isDarwin || isWindows) {
       return true; // Built-in support
     }
     

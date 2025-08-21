@@ -17,9 +17,6 @@ all: build deploy test-all
 # Fast: build and deploy only (skip tests for rapid iteration)
 fast: build deploy
 	@echo "⚡ Fast build complete (tests skipped)"
-	@sync
-	@sleep 0.5
-	@./scripts/animated-loading.sh
 
 # Generate embedded stdlib and compile binary for current platform
 build:
@@ -143,7 +140,7 @@ clean:
 
 # Run HLVM REPL
 run:
-	@./scripts/animated-loading.sh
+	@./hlvm
 
 # Install to system (requires sudo)
 install: build

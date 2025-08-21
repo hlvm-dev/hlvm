@@ -1,6 +1,6 @@
 // Filesystem module - Cross-platform file operations
 
-import * as platform from "../core/platform.js";
+import { pathSep } from "../core/platform.js";
 
 // File operations
 class FileOps {
@@ -164,7 +164,7 @@ class PathUtils {
    * // → '\tmp\test\file.txt' (Windows)
    */
   static join(...paths) {
-    return paths.join(platform.pathSep);
+    return paths.join(pathSep);
   }
   
   /**
@@ -176,7 +176,7 @@ class PathUtils {
    * // → '/tmp/test'
    */
   static dirname(path) {
-    const sep = platform.pathSep;
+    const sep = pathSep;
     const lastIndex = path.lastIndexOf(sep);
     return lastIndex === -1 ? "." : path.substring(0, lastIndex);
   }
@@ -193,7 +193,7 @@ class PathUtils {
    * // → 'file'
    */
   static basename(path, ext = "") {
-    const sep = platform.pathSep;
+    const sep = pathSep;
     const lastIndex = path.lastIndexOf(sep);
     const base = lastIndex === -1 ? path : path.substring(lastIndex + 1);
     return ext && base.endsWith(ext) 
