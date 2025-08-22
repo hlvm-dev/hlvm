@@ -11,18 +11,32 @@ await initializeOSSecurity();
 
 // Configuration constants
 class Config {
-  static readonly tempDir = Deno.env.get("TMPDIR") || Deno.env.get("TEMP") || Deno.env.get("TMP") || "/tmp";
+  static readonly homeDir = Deno.env.get("HOME") || Deno.env.get("USERPROFILE") || "";
+  static readonly hlvmDir = `${Config.homeDir}${Deno.build.os === "windows" ? "\\" : "/"}.hlvm`;
+  static readonly runtimeDir = `${Config.hlvmDir}${Deno.build.os === "windows" ? "\\" : "/"}runtime`;
   static readonly pathSep = Deno.build.os === "windows" ? "\\" : "/";
   static readonly exeExt = Deno.build.os === "windows" ? ".exe" : "";
-  static readonly denoPath = `${Config.tempDir}${Config.pathSep}hlvm-deno${Config.exeExt}`;
-  static readonly ollamaPath = `${Config.tempDir}${Config.pathSep}hlvm-ollama${Config.exeExt}`;
+  static readonly denoPath = `${Config.runtimeDir}${Config.pathSep}hlvm-deno${Config.exeExt}`;
+  static readonly ollamaPath = `${Config.runtimeDir}${Config.pathSep}hlvm-ollama${Config.exeExt}`;
+  static readonly versionFile = `${Config.runtimeDir}${Config.pathSep}.version`;
+  
+  static async ensureRuntimeDir(): Promise<void> {
+    try {
+      await Deno.mkdir(Config.runtimeDir, { recursive: true });
+    } catch {
+      // Directory already exists
+    }
+  }
 }
 
 // Binary extraction manager
 class BinaryExtractor {
   static async extract(name: string, targetPath: string, resourcePath: string): Promise<string> {
-    // Check if already extracted
-    if (await this.isValidBinary(targetPath)) {
+    // Ensure runtime directory exists
+    await Config.ensureRuntimeDir();
+    
+    // Check if already extracted with correct version
+    if (await this.isValidBinary(targetPath) && await this.isCorrectVersion()) {
       return targetPath;
     }
     
@@ -33,6 +47,7 @@ class BinaryExtractor {
     const extracted = await this.extractEmbedded(targetPath, resourcePath);
     if (extracted) {
       console.log(`\x1b[32m✓ ${name} ready\x1b[0m`);
+      // Don't update version here - let REPLManager do it after both extractions
       return extracted;
     }
     
@@ -44,6 +59,19 @@ class BinaryExtractor {
     }
     
     throw new Error(`Failed to extract ${name} binary. Neither embedded nor development binary found.`);
+  }
+  
+  static async isCorrectVersion(): Promise<boolean> {
+    try {
+      const version = await Deno.readTextFile(Config.versionFile);
+      return version === HLVM_VERSION;
+    } catch {
+      return false;
+    }
+  }
+  
+  static async updateVersion(): Promise<void> {
+    await Deno.writeTextFile(Config.versionFile, HLVM_VERSION);
   }
 
   private static async isValidBinary(path: string): Promise<boolean> {
@@ -80,16 +108,37 @@ class BinaryExtractor {
 // Environment setup manager
 class EnvironmentSetup {
   static async setup(): Promise<string> {
-    const initScriptPath = `${Config.tempDir}${Config.pathSep}hlvm-init.js`;
-    const stdlibPath = `${Config.tempDir}${Config.pathSep}stdlib`;
+    await Config.ensureRuntimeDir();
+    const initScriptPath = `${Config.runtimeDir}${Config.pathSep}hlvm-init.js`;
+    const stdlibPath = `${Config.runtimeDir}${Config.pathSep}stdlib`;
     
-    // ALWAYS extract fresh - no cache
+    // Check if stdlib cache is valid
+    const versionValid = await BinaryExtractor.isCorrectVersion();
+    const stdlibExists = await this.checkStdlibExists(stdlibPath);
+    
+    if (versionValid && stdlibExists) {
+      // Just update init script and use cached stdlib
+      await this.writeInitScript(initScriptPath, stdlibPath);
+      return initScriptPath;
+    }
+    
+    // Extract fresh if version mismatch or missing
     await this.createDirectoryStructure(stdlibPath);
     await this.writeStdlibModules(stdlibPath);
     await this.writeBridge();
     await this.writeInitScript(initScriptPath, stdlibPath);
+    await BinaryExtractor.updateVersion();
     
     return initScriptPath;
+  }
+  
+  static async checkStdlibExists(stdlibPath: string): Promise<boolean> {
+    try {
+      const stat = await Deno.stat(stdlibPath);
+      return stat.isDirectory;
+    } catch {
+      return false;
+    }
   }
 
 
@@ -103,26 +152,30 @@ class EnvironmentSetup {
   }
 
   private static async writeStdlibModules(stdlibPath: string): Promise<void> {
-    for (const [modulePath, moduleCode] of Object.entries(embeddedStdlib)) {
-      const filePath = `${stdlibPath}${Config.pathSep}${modulePath}`;
-      await Deno.writeTextFile(filePath, moduleCode);
-    }
+    // Parallel write all stdlib modules
+    await Promise.all(
+      Object.entries(embeddedStdlib).map(([modulePath, moduleCode]) => {
+        const filePath = `${stdlibPath}${Config.pathSep}${modulePath}`;
+        return Deno.writeTextFile(filePath, moduleCode);
+      })
+    );
   }
 
   private static async writeBridge(): Promise<void> {
-    await Deno.writeTextFile(`${Config.tempDir}${Config.pathSep}hlvm-bridge.ts`, embeddedBridge);
+    await Deno.writeTextFile(`${Config.runtimeDir}${Config.pathSep}hlvm-bridge.ts`, embeddedBridge);
   }
 
   private static async writeInitScript(initScriptPath: string, stdlibPath: string): Promise<void> {
     // Set global EMBEDDED_MODEL at the beginning of init code
     let initCode = `globalThis.EMBEDDED_MODEL = "${EMBEDDED_MODEL}";\n` + embeddedInit;
     initCode = initCode.replace(/from "\.\/stdlib\//g, `from "${stdlibPath}/`);
-    initCode = initCode.replace(/"..\/(src\/)?hlvm-bridge\.ts"/g, `"${Config.tempDir}${Config.pathSep}hlvm-bridge.ts"`);
+    initCode = initCode.replace(/"..\/(src\/)?hlvm-bridge\.ts"/g, `"${Config.runtimeDir}${Config.pathSep}hlvm-bridge.ts"`);
     await Deno.writeTextFile(initScriptPath, initCode);
   }
 
   static async createFallbackInit(): Promise<string> {
-    const initScriptPath = `${Config.tempDir}${Config.pathSep}hlvm-init.js`;
+    await Config.ensureRuntimeDir();
+    const initScriptPath = `${Config.runtimeDir}${Config.pathSep}hlvm-init.js`;
     await Deno.writeTextFile(initScriptPath, `
       globalThis.hlvm = { 
         platform: { os: "${Deno.build.os}", arch: "${Deno.build.arch}" },
@@ -425,8 +478,19 @@ class REPLManager {
 
   async start(): Promise<void> {
     try {
-      const denoPath = await BinaryExtractor.extract('deno', Config.denoPath, '../resources/deno');
-      const ollamaPath = await BinaryExtractor.extract('ollama', Config.ollamaPath, '../resources/ollama');
+      // Check version before extraction
+      const needsExtraction = !(await BinaryExtractor.isCorrectVersion());
+      
+      // Parallel extraction of binaries for faster startup
+      const [denoPath, ollamaPath] = await Promise.all([
+        BinaryExtractor.extract('deno', Config.denoPath, '../resources/deno'),
+        BinaryExtractor.extract('ollama', Config.ollamaPath, '../resources/ollama')
+      ]);
+      
+      // Update version file after successful extraction of both binaries
+      if (needsExtraction) {
+        await BinaryExtractor.updateVersion();
+      }
       
       // Setup cleanup on exit signals
       Deno.addSignalListener("SIGINT", () => this.cleanup().then(() => Deno.exit(0)));

@@ -164,7 +164,12 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:jangseoksoon.org)",
       "Bash(git log:*)",
-      "Bash(./scripts/build-bundle.ts)"
+      "Bash(./scripts/build-bundle.ts)",
+      "Bash(mdls:*)",
+      "WebFetch(domain:www.ycombinator.com)",
+      "Bash(git config:*)",
+      "Bash(screencapture:*)",
+      "Bash(/tmp/demo-qwen-agent.sh:*)"
     ],
     "deny": [],
     "ask": [],

@@ -61,7 +61,9 @@ export const context = {
     get image() {
       try {
         // Capture to temp file and read as bytes
-        const tempPath = `/tmp/hlvm_screen_${Date.now()}.png`;
+        const tempDir = Deno.env.get("HOME") ? `${Deno.env.get("HOME")}/.hlvm/runtime` : "/tmp";
+        try { Deno.mkdirSync(tempDir, { recursive: true }); } catch {}
+        const tempPath = `${tempDir}/hlvm_screen_${Date.now()}.png`;
         
         // Use screencapture command directly for sync operation
         if (Deno.build.os === "darwin") {

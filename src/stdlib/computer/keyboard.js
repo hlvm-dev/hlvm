@@ -2,7 +2,6 @@
 // Array format: ["cmd", "shift", "a"] where last element is the key, rest are modifiers
 
 import { platformCommand, PowerShellTemplates, initializeDocs, handleMacOSPermission } from "../core/utils.js";
-import { decode } from "../core/platform.js";
 
 // Global keyboard event listeners storage
 const keyListeners = new Map();

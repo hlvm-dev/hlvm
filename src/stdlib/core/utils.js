@@ -208,35 +208,11 @@ export function initializeDocs(functions, docs) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Common input validation
-
-/**
- * Get input with clipboard fallback
- */
-export async function getInputWithFallback(input) {
-  if (input !== undefined) return input;
-  // Dynamic import to avoid circular dependency
-  const clipboard = await globalThis.hlvm?.core?.io?.clipboard;
-  return clipboard ? await clipboard.read() : null;
-}
-
-/**
- * Validate required input
- */
-export function validateInput(input, errorMessage = "No input provided") {
-  if (!input || (typeof input === 'string' && !input.trim())) {
-    throw new Error(errorMessage);
-  }
-  return input;
-}
 
 export default {
   platformCommand,
   checkSuccess,
   handleMacOSPermission,
   PowerShellTemplates,
-  initializeDocs,
-  getInputWithFallback,
-  validateInput
+  initializeDocs
 };

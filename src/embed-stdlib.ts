@@ -6,8 +6,6 @@ import { join, dirname, relative } from "https://deno.land/std@0.220.0/path/mod.
 import { walk } from "https://deno.land/std@0.220.0/fs/walk.ts";
 import { EMBEDDED_MODEL } from "./version.ts";
 
-const __dirname = dirname(new URL(import.meta.url).pathname);
-
 // Automatically discover all .js files in stdlib directory
 const stdlibModules = [];
 const stdlibPath = new URL("./stdlib", import.meta.url).pathname;
