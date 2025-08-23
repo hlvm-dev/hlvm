@@ -1,6 +1,8 @@
 // HLVM Core Event System - Observe functions, properties, and files
 // Smart observation API that detects what you're trying to observe
 
+import { ManagedWatcher } from './resource.js';
+
 // Store all active observers
 const observers = new Map();
 const fileWatchers = new Map();
@@ -116,9 +118,8 @@ export function unobserve(target) {
   
   // Remove file watcher
   if (fileWatchers.has(target)) {
-    const { watcher, abortController } = fileWatchers.get(target);
-    abortController.abort(); // Signal the watching loop to stop
-    watcher.close(); // Close the watcher
+    const watcher = fileWatchers.get(target);
+    watcher.stop();
     fileWatchers.delete(target);
     return true;
   }
@@ -153,33 +154,18 @@ function observeFile(path, hooks) {
     throw new Error('File observation requires onChange hook');
   }
   
-  // Use Deno.watchFs for file watching
-  const watcher = Deno.watchFs(path);
+  const watcher = new ManagedWatcher(path);
+  fileWatchers.set(path, watcher);
   
-  // Create abort controller for cleanup
-  const abortController = new AbortController();
-  
-  // Store watcher with abort controller for cleanup
-  fileWatchers.set(path, { watcher, abortController });
-  
-  // Start watching in background with proper cleanup
-  (async () => {
+  watcher.start(async (event) => {
     try {
-      for await (const event of watcher) {
-        // Check if we should stop watching
-        if (abortController.signal.aborted) break;
-        
-        if (event.kind === 'modify' || event.kind === 'create') {
-          await hooks.onChange(event, path);
-        }
-      }
+      await hooks.onChange(event, path);
     } catch (error) {
-      // Ignore errors from closing the watcher
-      if (!abortController.signal.aborted && hooks.error) {
+      if (hooks.error) {
         await hooks.error(error, path);
       }
     }
-  })();
+  });
   
   return true;
 }

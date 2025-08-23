@@ -65,8 +65,8 @@ echo "════════════════════════�
 echo "EVENT OBSERVATION SYSTEM"
 echo "════════════════════════════════════════════"
 
-run_test "event.observe() hooks" "hlvm.core.event.observe('test.path', {before: () => {}}); console.log(hlvm.core.event.list().length >= 1)" "true"
-run_test "event.unobserve() removes" "hlvm.core.event.unobserve('test.path'); console.log(hlvm.core.event.list().filter(o => o.path === 'test.path').length)" "0"
+run_test "event.observe() hooks" "hlvm.core.event.observe('hlvm.core.io.fs.write', {before: () => {}}); console.log(hlvm.core.event.list().length >= 1)" "true"
+run_test "event.unobserve() removes" "hlvm.core.event.unobserve('hlvm.core.system.info'); console.log(hlvm.core.event.list().filter(o => o.path === 'hlvm.core.system.info').length)" "0"
 
 echo
 echo "════════════════════════════════════════════"

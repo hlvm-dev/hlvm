@@ -169,7 +169,8 @@
       "WebFetch(domain:www.ycombinator.com)",
       "Bash(git config:*)",
       "Bash(screencapture:*)",
-      "Bash(/tmp/demo-qwen-agent.sh:*)"
+      "Bash(/tmp/demo-qwen-agent.sh:*)",
+      "Bash(pgrep:*)"
     ],
     "deny": [],
     "ask": [],

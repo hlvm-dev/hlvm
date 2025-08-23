@@ -1,6 +1,9 @@
 // src/stdlib/ai.js
 // HLVM Stdlib AI - High-level AI functions
 
+import { handleMacOSPermission } from '../core/utils.js';
+import { COLORS, TERMINAL, startComputing } from '../core/terminal.js';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
 const SPINNER_INTERVAL = 80;
@@ -13,49 +16,7 @@ const DOWNLOAD_WAIT_INTERVAL = 1000;
 const CONFIRMATION_TIMEOUT = 30000;
 const PREVIEW_DIVIDER_LENGTH = 50;
 
-// Terminal UI helpers
-const COLORS = {
-  PURPLE: '\x1b[35m',
-  BRIGHT_PURPLE: '\x1b[95m',
-  GREEN: '\x1b[32m',
-  RED: '\x1b[91m',
-  YELLOW: '\x1b[33m',
-  GRAY: '\x1b[90m',
-  RESET: '\x1b[0m'
-};
-
-const TERMINAL = {
-  CLEAR_LINE: '\x1b[2K',
-  CURSOR_START: '\x1b[0G',
-  HIDE_CURSOR: '\x1b[?25l',
-  SHOW_CURSOR: '\x1b[?25h'
-};
-
-function startComputing(message = 'Computing') {
-  const frames = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
-  let i = 0, interval, first = true;
-  try { process.stdout.write(TERMINAL.HIDE_CURSOR); } catch {}
-  const render = () => {
-    const prefix = first ? '\n' : (TERMINAL.CLEAR_LINE + TERMINAL.CURSOR_START);
-    first = false;
-    try {
-      process.stdout.write(`${prefix}  ${COLORS.PURPLE}${frames[i]}${COLORS.RESET}  ${message}...`);
-    } catch {}
-    i = (i + 1) % frames.length;
-  };
-  render();
-  interval = setInterval(render, SPINNER_INTERVAL);
-  return {
-    update: (m) => { message = m; },
-    stop: () => {
-      clearInterval(interval);
-      try {
-        process.stdout.write(TERMINAL.CLEAR_LINE + TERMINAL.CURSOR_START);
-        process.stdout.write(TERMINAL.SHOW_CURSOR + '\n');
-      } catch {}
-    }
-  };
-}
+// Use startComputing from terminal.js - already imported above
 
 function showContextUsage(percentage, model = null) {
   let color = COLORS.PURPLE, icon = '○';
@@ -262,23 +223,8 @@ async function getInputWithFallback(input) {
   return await globalThis.hlvm.core.io.clipboard.read();
 }
 
-// Handle macOS permission errors consistently
-function handleMacOSPermissionError(stderr) {
-  if (!stderr || globalThis.hlvm.core.system.os !== 'darwin') return;
-  
-  const permissionPatterns = [
-    /Operation not permitted/i,
-    /not allowed to send Apple events/i,
-    /Automation.*not allowed/i
-  ];
-  
-  if (permissionPatterns.some(pattern => pattern.test(stderr))) {
-    console.log('\n🔐 macOS may have blocked this action.');
-    console.log('   Check System Settings → Privacy & Security (Automation / Accessibility / Full Disk Access)');
-    console.log('   Quick open:');
-    console.log('   open "x-apple.systempreferences:com.apple.preference.security?Privacy"');
-  }
-}
+// Use centralized permission handling from utils
+const handleMacOSPermissionError = (stderr) => handleMacOSPermission(stderr);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // System prompts

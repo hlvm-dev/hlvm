@@ -1,63 +1,67 @@
 // UI Control Module - Control macOS GUI via WebSocket
 // Replaces __HLVM_COMMAND__ strings with proper JSON-RPC calls
 
-let socket = null;
+import { ManagedWebSocket } from '../core/resource.js';
+
+const socket = new ManagedWebSocket('ws://localhost:11436');
 let requestId = 0;
 const pending = new Map();
 
 // Connect to macOS app WebSocket server
 async function connect(port = 11436) {
-  return new Promise((resolve, reject) => {
-    try {
-      socket = new WebSocket(`ws://localhost:${port}`);
-      
-      socket.onopen = () => {
-        console.log("Connected to macOS app");
-        resolve(true);
-      };
-      
-      socket.onerror = (error) => {
-        reject(new Error(`Connection failed: ${error}`));
-      };
-      
-      socket.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
+  if (port !== 11436) {
+    socket.url = `ws://localhost:${port}`;
+  }
+  
+  const connected = await socket.connect();
+  
+  if (connected) {
+    // Set up message handler
+    socket.on('message', (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        
+        // Handle response to our request
+        if (msg.id && pending.has(msg.id)) {
+          const { resolve, reject, timeout } = pending.get(msg.id);
+          clearTimeout(timeout);
+          pending.delete(msg.id);
           
-          // Handle response to our request
-          if (msg.id && pending.has(msg.id)) {
-            const { resolve, reject } = pending.get(msg.id);
-            pending.delete(msg.id);
-            
-            if (msg.error) {
-              reject(new Error(msg.error.message));
-            } else {
-              resolve(msg.result);
-            }
+          if (msg.error) {
+            reject(new Error(msg.error.message));
+          } else {
+            resolve(msg.result);
           }
-          
-          // Handle notifications from app
-          if (!msg.id && msg.method) {
-            handleNotification(msg.method, msg.params);
-          }
-        } catch (e) {
-          console.error("Message handling error:", e);
         }
-      };
-      
-      socket.onclose = () => {
-        console.log("Disconnected from macOS app");
-        socket = null;
-      };
-    } catch (error) {
-      reject(error);
-    }
-  });
+        
+        // Handle notifications from app
+        if (!msg.id && msg.method) {
+          handleNotification(msg.method, msg.params);
+        }
+      } catch (e) {
+        console.error("Message handling error:", e);
+      }
+    });
+    
+    socket.on('close', () => {
+      console.log("Disconnected from macOS app");
+      // Clear all pending requests
+      for (const [id, { reject, timeout }] of pending) {
+        clearTimeout(timeout);
+        reject(new Error("Socket closed"));
+      }
+      pending.clear();
+    });
+    
+    console.log("Connected to macOS app");
+  }
+  
+  return connected;
 }
 
 // Send JSON-RPC request and wait for response
 async function request(method, params = null) {
-  if (!socket || socket.readyState !== WebSocket.OPEN) {
+  if (!socket.isConnected()) {
     // Try to connect
     try {
       await connect();
@@ -74,16 +78,7 @@ async function request(method, params = null) {
       reject(new Error("Request timeout"));
     }, 5000);
     
-    pending.set(id, { 
-      resolve: (result) => {
-        clearTimeout(timeout);
-        resolve(result);
-      }, 
-      reject: (error) => {
-        clearTimeout(timeout);
-        reject(error);
-      }
-    });
+    pending.set(id, { resolve, reject, timeout });
     
     const request = {
       jsonrpc: "2.0",
@@ -92,13 +87,19 @@ async function request(method, params = null) {
       params
     };
     
-    socket.send(JSON.stringify(request));
+    try {
+      socket.send(JSON.stringify(request));
+    } catch (error) {
+      clearTimeout(timeout);
+      pending.delete(id);
+      reject(error);
+    }
   });
 }
 
 // Send notification (no response expected)
 function notify(method, params = null) {
-  if (!socket || socket.readyState !== WebSocket.OPEN) {
+  if (!socket.isConnected()) {
     console.warn("App not connected");
     return;
   }
@@ -109,7 +110,11 @@ function notify(method, params = null) {
     params
   };
   
-  socket.send(JSON.stringify(notification));
+  try {
+    socket.send(JSON.stringify(notification));
+  } catch (error) {
+    console.error("Failed to send notification:", error);
+  }
 }
 
 // Handle notifications from app
@@ -127,13 +132,16 @@ export const ui = {
   // Connection management
   connect,
   disconnect: () => {
-    if (socket) {
-      socket.close();
-      socket = null;
+    socket.cleanup();
+    // Clear all pending requests on disconnect
+    for (const [id, { reject, timeout }] of pending) {
+      clearTimeout(timeout);
+      reject(new Error("Disconnected"));
     }
+    pending.clear();
   },
   
-  isConnected: () => socket && socket.readyState === WebSocket.OPEN,
+  isConnected: () => socket.isConnected(),
   
   // Spotlight commands (replacing __HLVM_SPOTLIGHT_*)
   spotlight: {

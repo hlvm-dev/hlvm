@@ -189,6 +189,28 @@ Current public APIs that need documentation:
 
 Documentation should follow the style of https://github.com/ollama/ollama/blob/main/docs/api.md
 
+## Code Quality Requirements
+
+### DRY Principle - NEVER Allow Repetition
+**Every piece of code must follow the DRY (Don't Repeat Yourself) principle:**
+- If you see the same code in 2+ places, extract it into a reusable function
+- Use shared utility functions for common patterns
+- Create abstractions for repeated logic
+- Import and reuse existing modules instead of duplicating functionality
+
+### Remove ALL Unused Code
+**Every time you modify code, you MUST:**
+- Remove any functions that are no longer called
+- Delete commented-out code blocks
+- Remove unused imports and variables
+- Clean up any dead code paths
+- Delete deprecated methods that have been replaced
+
+**Before committing any changes:**
+1. Search for all references to modified functions
+2. Remove any code that has become obsolete
+3. Ensure no unused exports remain
+
 ## Important Instructions
 
 **DO ONLY WHAT IS ASKED. DO NOT CREATE FILES OR DOCUMENTATION UNLESS EXPLICITLY REQUESTED.**

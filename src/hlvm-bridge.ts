@@ -291,24 +291,57 @@ class HLVMBridge {
     
     return new Promise((resolve, reject) => {
       let handler: ((event: MessageEvent) => void) | null = null;
+      let timeout: NodeJS.Timeout | null = null;
       
       const cleanup = () => {
         if (handler) {
           socket.removeEventListener("message", handler);
           handler = null;
         }
+        if (timeout) {
+          clearTimeout(timeout);
+          timeout = null;
+        }
       };
       
-      const timeout = setTimeout(() => {
+      // Also cleanup on socket close/error
+      const socketCloseHandler = () => {
         cleanup();
+        reject(new Error("Socket closed during request"));
+      };
+      
+      const socketErrorHandler = () => {
+        cleanup();
+        reject(new Error("Socket error during request"));
+      };
+      
+      socket.addEventListener("close", socketCloseHandler);
+      socket.addEventListener("error", socketErrorHandler);
+      
+      timeout = setTimeout(() => {
+        cleanup();
+        socket.removeEventListener("close", socketCloseHandler);
+        socket.removeEventListener("error", socketErrorHandler);
         reject(new Error("Request timeout"));
       }, timeoutMs);
       
-      handler = this.createResponseHandler(id, timeout, resolve, reject, cleanup);
+      handler = this.createResponseHandler(id, timeout, resolve, reject, () => {
+        cleanup();
+        socket.removeEventListener("close", socketCloseHandler);
+        socket.removeEventListener("error", socketErrorHandler);
+      });
+      
       socket.addEventListener("message", handler);
       
-      const request: JSONRPCRequest = { jsonrpc: "2.0", id, method, params };
-      socket.send(JSON.stringify(request));
+      try {
+        const request: JSONRPCRequest = { jsonrpc: "2.0", id, method, params };
+        socket.send(JSON.stringify(request));
+      } catch (error) {
+        cleanup();
+        socket.removeEventListener("close", socketCloseHandler);
+        socket.removeEventListener("error", socketErrorHandler);
+        reject(error);
+      }
     });
   }
 

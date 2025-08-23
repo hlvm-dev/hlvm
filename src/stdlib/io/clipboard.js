@@ -1,6 +1,7 @@
 // Clipboard module - Cross-platform clipboard operations
 
 import { platformCommand, PowerShellTemplates, checkSuccess, initializeDocs } from "../core/utils.js";
+import { execCommand } from "../core/resource.js";
 
 /**
  * Reads text from system clipboard
@@ -33,20 +34,9 @@ export async function read() {
  * // → Text copied to clipboard
  */
 export async function write(text) {
-  // For darwin/linux, we need stdin support
-  const writeWithStdin = async (cmd, args) => {
-    const p = new Deno.Command(cmd, { args, stdin: "piped" });
-    const proc = p.spawn();
-    const writer = proc.stdin.getWriter();
-    await writer.write(new TextEncoder().encode(text));
-    await writer.close();
-    const status = await proc.status;
-    return { success: status.success, stdout: "", stderr: "", code: status.code };
-  };
-  
   // Darwin uses stdin
   if (globalThis.Deno.build.os === "darwin") {
-    const result = await writeWithStdin("pbcopy", []);
+    const result = await execCommand("pbcopy", [], { stdin: "piped", input: text });
     checkSuccess(result, "Clipboard write");
     return;
   }
@@ -69,7 +59,7 @@ export async function write(text) {
   
   for (const tool of tools) {
     try {
-      const result = await writeWithStdin(tool.cmd, tool.args);
+      const result = await execCommand(tool.cmd, tool.args, { stdin: "piped", input: text });
       if (result.success) return;
     } catch {
       // Try next tool
