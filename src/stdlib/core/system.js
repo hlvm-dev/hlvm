@@ -1,6 +1,14 @@
 // System module - Cross-platform system utilities
 
-import { shell, decode } from "./platform.js";
+import { decode, isWindows } from "./platform.js";
+
+// Shell access helper
+function shell() {
+  if (isWindows) {
+    return ["cmd", "/c"];
+  }
+  return ["sh", "-c"];
+}
 
 export async function hostname() {
   try {

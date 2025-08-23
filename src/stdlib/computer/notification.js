@@ -1,7 +1,7 @@
 // Notification module - Cross-platform UI dialogs and notifications
 
 import { isDarwin, isWindows, escapeShell, decode, powershell, PS, ERRORS } from "../core/platform.js";
-import { initializeDocs } from "../core/utils.js";
+import { initDocs } from "../core/utils.js";
 
 // DRY: Generic Linux dialog handler
 async function linuxDialog(type, message, title, defaultValue = "") {
@@ -131,9 +131,9 @@ async function windowsDialog(type, message, title, defaultValue = "") {
 
 // Public API - Now much cleaner
 export async function alert(message, title = "Alert") {
-  if (platform.isDarwin) {
+  if (isDarwin) {
     return osascriptDialog("alert", message, title);
-  } else if (platform.isWindows) {
+  } else if (isWindows) {
     return windowsDialog("alert", message, title);
   } else {
     return linuxDialog("alert", message, title);
@@ -141,9 +141,9 @@ export async function alert(message, title = "Alert") {
 }
 
 export async function confirm(message, title = "Confirm") {
-  if (platform.isDarwin) {
+  if (isDarwin) {
     return osascriptDialog("confirm", message, title);
-  } else if (platform.isWindows) {
+  } else if (isWindows) {
     return windowsDialog("confirm", message, title);
   } else {
     return linuxDialog("confirm", message, title);
@@ -151,9 +151,9 @@ export async function confirm(message, title = "Confirm") {
 }
 
 export async function prompt(message, defaultValue = "", title = "Input") {
-  if (platform.isDarwin) {
+  if (isDarwin) {
     return osascriptDialog("prompt", message, title, defaultValue);
-  } else if (platform.isWindows) {
+  } else if (isWindows) {
     return windowsDialog("prompt", message, title, defaultValue);
   } else {
     return linuxDialog("prompt", message, title, defaultValue);
@@ -164,14 +164,14 @@ export async function notify(message, title = "Notification", subtitle = "") {
   const escapedMessage = escapeShell(message);
   const escapedTitle = escapeShell(title);
   
-  if (platform.isDarwin) {
+  if (isDarwin) {
     let script = `display notification "${escapedMessage}" with title "${escapedTitle}"`;
     if (subtitle) {
       script += ` subtitle "${escapeShell(subtitle)}"`;
     }
     await new Deno.Command("osascript", { args: ["-e", script] }).output();
     
-  } else if (platform.isWindows) {
+  } else if (isWindows) {
     // Windows toast notification
     try {
       const script = `
@@ -212,7 +212,7 @@ export async function notify(message, title = "Notification", subtitle = "") {
 
 
 // Initialize docs on module load
-initializeDocs({ alert, confirm, prompt, notify }, {
+initDocs({ alert, confirm, prompt, notify }, {
   alert: `alert(message, title?)
 Shows alert dialog
 Parameters: message, title (optional)`,

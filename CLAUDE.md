@@ -191,6 +191,18 @@ Documentation should follow the style of https://github.com/ollama/ollama/blob/m
 
 ## Code Quality Requirements
 
+### Concise API Naming - Balance Brevity with Clarity
+**APIs should be concise but must maintain clarity:**
+- Remove truly redundant words when context is clear
+- Keep names that aid understanding (doubleClick, isAvailable are fine)
+- Shorten overly verbose names (initialize → init)
+- Leverage namespace context where appropriate
+- Examples:
+  - ✅ Good: `initializeDocs()` → `initDocs()`
+  - ✅ Good: `hlvm.storage.save(msg)` not `saveMessage(msg)`
+  - ❌ Bad: `doubleClick()` → `double()` (loses clarity)
+  - ❌ Bad: `isRunning()` → `running()` (less clear as property vs method)
+
 ### DRY Principle - NEVER Allow Repetition
 **Every piece of code must follow the DRY (Don't Repeat Yourself) principle:**
 - If you see the same code in 2+ places, extract it into a reusable function

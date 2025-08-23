@@ -170,7 +170,13 @@
       "Bash(git config:*)",
       "Bash(screencapture:*)",
       "Bash(/tmp/demo-qwen-agent.sh:*)",
-      "Bash(pgrep:*)"
+      "Bash(pgrep:*)",
+      "Bash(/tmp/test-io-modules.sh:*)",
+      "Bash(./test/test.js)",
+      "Bash(../hlvm test.js)",
+      "Bash(../hlvm -c \"console.log(Object.keys(hlvm.core).sort())\")",
+      "Bash(hlvm:*)",
+      "Bash(./test.sh:*)"
     ],
     "deny": [],
     "ask": [],

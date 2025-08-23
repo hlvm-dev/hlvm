@@ -2,7 +2,7 @@
 
 // Script to embed stdlib files into TypeScript code for compilation
 
-import { join, dirname, relative } from "https://deno.land/std@0.220.0/path/mod.ts";
+import { relative } from "https://deno.land/std@0.220.0/path/mod.ts";
 import { walk } from "https://deno.land/std@0.220.0/fs/walk.ts";
 import { EMBEDDED_MODEL } from "./version.ts";
 

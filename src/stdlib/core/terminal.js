@@ -127,18 +127,18 @@ export const SYMBOLS = {
 // Utility functions
 
 /**
- * Start a computing spinner animation
+ * Start a spinner animation
  * @param {string} [message='Computing'] - Message to display
  * @param {number} [interval=80] - Animation interval in ms
  * @returns {{update: Function, stop: Function}} Object with update and stop methods
  * @example
- * const spinner = startComputing('Processing');
+ * const spinner = spinner('Processing');
  * await someAsyncOperation();
  * spinner.update('Almost done');
  * await moreWork();
  * spinner.stop();
  */
-export function startComputing(message = 'Computing', interval = 80) {
+export function spinner(message = 'Computing', interval = 80) {
   const spinner = SPINNERS.default;
   let i = 0;
   let first = true;
@@ -172,65 +172,26 @@ export function startComputing(message = 'Computing', interval = 80) {
   };
 }
 
-/**
- * Create a progress bar
- * @param {number} current - Current value
- * @param {number} total - Total value
- * @param {number} [width=30] - Bar width
- * @returns {string} Formatted progress bar
- * @example
- * console.log(createProgressBar(50, 100));
- * // → [███████████████               ] 50%
- */
-export function createProgressBar(current, total, width = 30) {
-  const percentage = Math.round((current / total) * 100);
-  const filled = Math.round((current / total) * width);
-  const empty = width - filled;
-  
-  const bar = PROGRESS.BAR_FULL.repeat(filled) + ' '.repeat(empty);
-  return `[${bar}] ${percentage}%`;
-}
-
-/**
- * Format text with color
- * @param {string} text - Text to format
- * @param {string} color - Color from COLORS object
- * @returns {string} Formatted text
- * @example
- * console.log(colorize('Success!', COLORS.GREEN));
- */
-export function colorize(text, color) {
-  return `${color}${text}${COLORS.RESET}`;
-}
-
-/**
- * Clear the terminal screen
- */
-export function clearScreen() {
-  process.stdout.write(TERMINAL.CLEAR_SCREEN);
-  process.stdout.write('\x1b[H'); // Move cursor to top-left
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Initialize documentation
-function initializeDocs() {
+function initDocs() {
   const docs = {
     COLORS: 'Terminal color codes for text formatting',
     TERMINAL: 'Terminal control sequences for cursor and screen manipulation',
     SPINNERS: 'Spinner animation character sets',
     PROGRESS: 'Progress bar and box drawing characters',
     SYMBOLS: 'Common UI symbols and indicators',
-    startComputing: startComputing.__doc__ || 'Start a computing spinner animation',
-    createProgressBar: createProgressBar.__doc__ || 'Create a progress bar',
-    colorize: colorize.__doc__ || 'Format text with color',
-    clearScreen: clearScreen.__doc__ || 'Clear the terminal screen'
+    spinner: 'Start a spinner animation'
   };
   
-  Object.entries(docs).forEach(([key, doc]) => {
-    if (exports[key]) {
-      exports[key].__doc__ = doc;
-    }
-  });
+  // Set documentation on exported objects
+  COLORS.__doc__ = docs.COLORS;
+  TERMINAL.__doc__ = docs.TERMINAL;
+  SPINNERS.__doc__ = docs.SPINNERS;
+  PROGRESS.__doc__ = docs.PROGRESS;
+  SYMBOLS.__doc__ = docs.SYMBOLS;
+  spinner.__doc__ = docs.spinner;
 }
 
-initializeDocs();
+initDocs();

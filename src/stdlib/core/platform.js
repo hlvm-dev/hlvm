@@ -32,15 +32,6 @@ export function homeDir() {
 
 // Path and executable info
 export const pathSep = isWindows ? "\\" : "/";
-export const exeExt = isWindows ? ".exe" : "";
-
-// Shell access
-export function shell() {
-  if (isWindows) {
-    return ["cmd", "/c"];
-  }
-  return ["sh", "-c"];
-}
 
 // ===== MERGED FROM utils.js =====
 
@@ -95,18 +86,6 @@ export const PS = {
   visualBasic: "Add-Type -AssemblyName Microsoft.VisualBasic"
 };
 
-// Linux tool with xdotool/ydotool fallback
-export async function linuxTool(xdotoolArgs, ydotoolArgs, errorMsg) {
-  try {
-    return await new Deno.Command("xdotool", { args: xdotoolArgs }).output();
-  } catch {
-    try {
-      return await new Deno.Command("ydotool", { args: ydotoolArgs }).output();
-    } catch {
-      throw new Error(errorMsg || "Install xdotool (X11) or ydotool (Wayland)");
-    }
-  }
-}
 
 // Common error messages
 export const ERRORS = {

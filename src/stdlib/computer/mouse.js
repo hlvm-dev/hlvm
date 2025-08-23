@@ -1,6 +1,6 @@
 // Mouse module - Cross-platform mouse automation
 
-import { platformCommand, PowerShellTemplates, initializeDocs } from "../core/utils.js";
+import { platformCommand, PowerShellTemplates, initDocs } from "../core/utils.js";
 
 /**
  * Move mouse cursor to specified position
@@ -264,7 +264,7 @@ Quartz.CGEventPost(Quartz.kCGHIDEventTap, event)`;
 }
 
 // Initialize docs on module load
-initializeDocs({ move, click, position, doubleClick, drag }, {
+initDocs({ move, click, position, doubleClick, drag }, {
   move: `move(x, y)
 Moves mouse cursor to specified position
 Parameters: x, y - coordinates`,

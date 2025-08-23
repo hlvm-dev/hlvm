@@ -1,10 +1,7 @@
 // Keyboard module - Cross-platform keyboard automation with unified array format
 // Array format: ["cmd", "shift", "a"] where last element is the key, rest are modifiers
 
-import { platformCommand, PowerShellTemplates, initializeDocs, handleMacOSPermission } from "../core/utils.js";
-
-// Global keyboard event listeners storage
-const keyListeners = new Map();
+import { platformCommand, PowerShellTemplates, initDocs, handleMacOSPermission } from "../core/utils.js";
 
 // Key mappings for cross-platform support
 const KEY_MAP = {
@@ -55,12 +52,6 @@ function normalizeKeys(keys) {
     if (lower === 'option') return 'alt';
     return lower;
   });
-}
-
-// Get string representation of keys for Map key
-function getKeyString(keys) {
-  const normalized = normalizeKeys(keys);
-  return normalized.sort().join('+');
 }
 
 export async function type(text) {
@@ -177,85 +168,14 @@ export async function press(keys) {
   }
 }
 
-// Register a global keyboard shortcut listener
-export function onKeyPress(keys, callback) {
-  const keyString = getKeyString(keys);
-  
-  // Store the callback
-  if (!keyListeners.has(keyString)) {
-    keyListeners.set(keyString, []);
-  }
-  keyListeners.get(keyString).push(callback);
-  
-  // Platform-specific global hotkey registration would go here
-  // For now, this is a stub that stores the callbacks for future implementation
-  console.warn('Global keyboard shortcuts not yet implemented. Callback registered for future use.');
-  
-  return true;
-}
-
-// Unregister a global keyboard shortcut listener
-export function offKeyPress(keys, callback) {
-  const keyString = getKeyString(keys);
-  
-  if (!keyListeners.has(keyString)) {
-    return false;
-  }
-  
-  const callbacks = keyListeners.get(keyString);
-  
-  if (callback) {
-    // Remove specific callback
-    const index = callbacks.indexOf(callback);
-    if (index > -1) {
-      callbacks.splice(index, 1);
-    }
-    
-    // Clean up if no callbacks left
-    if (callbacks.length === 0) {
-      keyListeners.delete(keyString);
-    }
-  } else {
-    // Remove all callbacks for this key combination
-    keyListeners.delete(keyString);
-  }
-  
-  // Platform-specific deregistration would go here
-  
-  return true;
-}
-
-// List all registered keyboard shortcuts
-export function listKeyListeners() {
-  const result = [];
-  for (const [keyString, callbacks] of keyListeners.entries()) {
-    result.push({
-      keys: keyString.split('+'),
-      callbackCount: callbacks.length
-    });
-  }
-  return result;
-}
 
 // Initialize docs on module load
-initializeDocs({ type, press, onKeyPress, offKeyPress, listKeyListeners }, {
+initDocs({ type, press }, {
   type: `type(text)
 Types text using keyboard
 Parameters: text - string to type`,
   
   press: `press(keys)
 Presses key combination
-Parameters: keys - array format ["cmd", "shift", "a"]`,
-  
-  onKeyPress: `onKeyPress(keys, callback)
-Registers global keyboard shortcut listener
-Parameters: keys - array format, callback - function`,
-  
-  offKeyPress: `offKeyPress(keys, callback?)
-Unregisters keyboard shortcut listener
-Parameters: keys - array format, callback - optional specific callback`,
-  
-  listKeyListeners: `listKeyListeners()
-Lists all registered keyboard shortcuts
-Returns: array of {keys, callbackCount}`
+Parameters: keys - array format ["cmd", "shift", "a"]`
 });

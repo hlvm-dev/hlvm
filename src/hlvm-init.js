@@ -137,10 +137,7 @@ void (globalThis.hlvm = (() => {
       computer: {
         keyboard: {
           type: keyboard.type,
-          press: keyboard.press,
-          onKeyPress: keyboard.onKeyPress,
-          offKeyPress: keyboard.offKeyPress,
-          listKeyListeners: keyboard.listKeyListeners
+          press: keyboard.press
         },
         mouse: {
           move: mouse.move,

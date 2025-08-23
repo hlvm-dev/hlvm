@@ -7,28 +7,38 @@ import { isDarwin, isWindows, decode } from "./platform.js";
 /**
  * Execute platform-specific commands with automatic OS detection
  * @param {Object} commands - Platform-specific command configurations
- * @param {Object} commands.darwin - macOS command config {cmd, args}
- * @param {Object} commands.windows - Windows command config {cmd, args} or {script} for PowerShell
+ * @param {Object} commands.darwin - macOS command config {cmd, args, stdin?, input?}
+ * @param {Object} commands.windows - Windows command config {cmd, args, stdin?, input?} or {script, stdin?, input?} for PowerShell
  * @param {Array|Object} commands.linux - Linux command(s) - can be array for fallback tools
+ * @param {Object} options - Additional options {stdin?, input?} applied to all platforms
  * @returns {Promise<Object>} Command result with {success, stdout, stderr, code}
  */
-export async function platformCommand(commands) {
+export async function platformCommand(commands, options = {}) {
+  // Merge platform-specific options with general options
+  const mergeOptions = (platformConfig) => ({
+    ...platformConfig,
+    stdin: platformConfig.stdin || options.stdin,
+    input: platformConfig.input !== undefined ? platformConfig.input : options.input
+  });
+  
   if (isDarwin && commands.darwin) {
-    return await runCommand(commands.darwin);
+    return await runCommand(mergeOptions(commands.darwin));
   }
   
   if (isWindows && commands.windows) {
-    if (commands.windows.script) {
-      // PowerShell script execution
-      return await runPowerShell(commands.windows.script);
+    const config = mergeOptions(commands.windows);
+    if (config.script) {
+      // PowerShell script execution with potential stdin
+      return await runPowerShell(config.script, config.stdin, config.input);
     }
-    return await runCommand(commands.windows);
+    return await runCommand(config);
   }
   
   if (commands.linux) {
     // Linux with fallback support for multiple tools
     const tools = Array.isArray(commands.linux) ? commands.linux : [commands.linux];
-    return await runWithFallback(tools);
+    const toolsWithOptions = tools.map(tool => mergeOptions(tool));
+    return await runWithFallback(toolsWithOptions);
   }
   
   throw new Error(`Unsupported platform: ${Deno.build.os}`);
@@ -38,8 +48,26 @@ export async function platformCommand(commands) {
  * Run a single command
  */
 async function runCommand(config) {
-  const { cmd, args = [] } = config;
-  const command = new Deno.Command(cmd, { args });
+  const { cmd, args = [], stdin, input } = config;
+  const options = { args };
+  
+  if (stdin === "piped" && input !== undefined) {
+    // Handle stdin input
+    const command = new Deno.Command(cmd, { ...options, stdin: "piped" });
+    const proc = command.spawn();
+    const writer = proc.stdin.getWriter();
+    await writer.write(new TextEncoder().encode(input));
+    await writer.close();
+    const result = await proc.output();
+    return {
+      success: result.success,
+      stdout: decode(result.stdout),
+      stderr: decode(result.stderr),
+      code: result.code
+    };
+  }
+  
+  const command = new Deno.Command(cmd, options);
   const result = await command.output();
   return {
     success: result.success,
@@ -52,10 +80,12 @@ async function runCommand(config) {
 /**
  * Run PowerShell script on Windows
  */
-async function runPowerShell(script) {
+async function runPowerShell(script, stdin, input) {
   return await runCommand({
     cmd: "powershell",
-    args: ["-NoProfile", "-Command", script]
+    args: ["-NoProfile", "-Command", script],
+    stdin,
+    input
   });
 }
 
@@ -197,7 +227,7 @@ export const PowerShellTemplates = {
  * @param {Object} functions - Object containing functions to document
  * @param {Object} docs - Documentation strings keyed by function name
  */
-export function initializeDocs(functions, docs) {
+export function initDocs(functions, docs) {
   const inspectSymbol = Symbol.for('Deno.customInspect');
   
   for (const [name, fn] of Object.entries(functions)) {
@@ -207,12 +237,3 @@ export function initializeDocs(functions, docs) {
     }
   }
 }
-
-
-export default {
-  platformCommand,
-  checkSuccess,
-  handleMacOSPermission,
-  PowerShellTemplates,
-  initializeDocs
-};

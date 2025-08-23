@@ -1,6 +1,7 @@
 // Screen module - Cross-platform screen capture
 
 import { isDarwin, isWindows, tempDir, pathSep, decode } from "../core/platform.js";
+import { platformCommand, PowerShellTemplates, checkSuccess, initDocs } from "../core/utils.js";
 
 export async function capture(output = null, options = {}) {
   // Use platform-specific temp file if no output specified
@@ -10,95 +11,29 @@ export async function capture(output = null, options = {}) {
     output = `${tempDirectory}${pathSep}screenshot-${timestamp}.png`;
   }
   
-  if (isDarwin) {
-    // macOS: screencapture (built-in)
-    const args = ["-x"]; // No sound
-    
-    if (options.interactive) {
-      args.push("-i"); // Interactive mode (user selects window)
-    }
-    if (options.selection || options.select) {
-      args.push("-s"); // Selection mode (user draws rectangle)
-    }
-    if (options.window) {
-      args.push("-w"); // Window selection mode
-    }
-    if (options.delay) {
-      args.push("-T", String(options.delay)); // Delay in seconds
-    }
-    
-    args.push(output);
-    
-    const { success } = await new Deno.Command("screencapture", { args }).output();
-    if (!success) throw new Error("Screenshot failed");
-    
-  } else if (isWindows) {
-    // Windows: PowerShell screenshot (built-in)
-    const script = `
-      Add-Type -AssemblyName System.Windows.Forms
-      Add-Type -AssemblyName System.Drawing
-      
-      $screen = [System.Windows.Forms.Screen]::PrimaryScreen
-      $bounds = $screen.Bounds
-      $bitmap = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
-      $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-      $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
-      $bitmap.Save("${output.replace(/\\/g, '\\\\')}")
-      $graphics.Dispose()
-      $bitmap.Dispose()
-    `;
-    
-    const { success } = await new Deno.Command("powershell", {
-      args: ["-NoProfile", "-Command", script]
-    }).output();
-    if (!success) throw new Error("Screenshot failed");
-    
-  } else {
-    // Linux: Try multiple screenshot tools
-    const tools = [
-      {
-        cmd: "scrot",
-        args: options.selection ? ["-s", output] : [output]
-      },
-      {
-        cmd: "gnome-screenshot",
-        args: options.selection 
-          ? ["-a", "-f", output]
-          : ["-f", output]
-      },
-      {
-        cmd: "spectacle",
-        args: options.selection
-          ? ["-r", "-b", "-n", "-o", output]
-          : ["-b", "-n", "-o", output]
-      },
-      {
-        cmd: "import", // ImageMagick
-        args: [output]
-      }
-    ];
-    
-    let captured = false;
-    for (const tool of tools) {
-      try {
-        const { success } = await new Deno.Command(tool.cmd, {
-          args: tool.args
-        }).output();
-        if (success) {
-          captured = true;
-          break;
-        }
-      } catch {
-        // Try next tool
-      }
-    }
-    
-    if (!captured) {
-      throw new Error(
-        "Screenshot failed. Install one of: scrot, gnome-screenshot, spectacle, or imagemagick"
-      );
-    }
-  }
+  // Build macOS args
+  const darwinArgs = ["-x"]; // No sound
+  if (options.interactive) darwinArgs.push("-i");
+  if (options.selection || options.select) darwinArgs.push("-s");
+  if (options.window) darwinArgs.push("-w");
+  if (options.delay) darwinArgs.push("-T", String(options.delay));
+  darwinArgs.push(output);
+  
+  // Build Linux tool configs
+  const linuxTools = [
+    { cmd: "scrot", args: options.selection ? ["-s", output] : [output] },
+    { cmd: "gnome-screenshot", args: options.selection ? ["-a", "-f", output] : ["-f", output] },
+    { cmd: "spectacle", args: options.selection ? ["-r", "-b", "-n", "-o", output] : ["-b", "-n", "-o", output] },
+    { cmd: "import", args: [output] }
+  ];
+  
+  const result = await platformCommand({
+    darwin: { cmd: "screencapture", args: darwinArgs },
+    windows: { script: PowerShellTemplates.screenshot(output) },
+    linux: linuxTools
+  });
+  
+  checkSuccess(result, "Screenshot capture");
   
   return output;
 }
@@ -177,3 +112,13 @@ export async function getScreenSize() {
 
 
 // Initialize docs on module load
+initDocs({ capture, getScreenSize }, {
+  capture: `capture(output?, options?)
+Captures a screenshot to file
+Parameters: output - file path, options - {selection, window, delay}
+Returns: output path`,
+  
+  getScreenSize: `getScreenSize()
+Gets primary screen dimensions
+Returns: {width, height} in pixels`
+});

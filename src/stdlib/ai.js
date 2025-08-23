@@ -2,21 +2,19 @@
 // HLVM Stdlib AI - High-level AI functions
 
 import { handleMacOSPermission } from '../core/utils.js';
-import { COLORS, TERMINAL, startComputing } from '../core/terminal.js';
+import { COLORS, TERMINAL, spinner } from '../core/terminal.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
-const SPINNER_INTERVAL = 80;
 const CONTEXT_WARNING_THRESHOLD = 80;
 const CONTEXT_CRITICAL_THRESHOLD = 95;
 const TOKEN_ESTIMATE_DIVISOR = 4;
 const MAX_CONTEXT_TOKENS = 6000;
 const MODEL_STARTUP_DELAY = 2000;
-const DOWNLOAD_WAIT_INTERVAL = 1000;
 const CONFIRMATION_TIMEOUT = 30000;
 const PREVIEW_DIVIDER_LENGTH = 50;
 
-// Use startComputing from terminal.js - already imported above
+// Use spinner from terminal.js - already imported above
 
 function showContextUsage(percentage, model = null) {
   let color = COLORS.PURPLE, icon = '○';
@@ -223,8 +221,6 @@ async function getInputWithFallback(input) {
   return await globalThis.hlvm.core.io.clipboard.read();
 }
 
-// Use centralized permission handling from utils
-const handleMacOSPermissionError = (stderr) => handleMacOSPermission(stderr);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // System prompts
@@ -287,7 +283,7 @@ async function request(input, config = {}) {
   const model = config.model || getDefaultModel();
   await ensureModel(model);
   
-  const spinner = config.spinner && startComputing(config.spinner);
+  const spin = config.spinner && spinner(config.spinner);
   
   try {
     const response = await globalThis.hlvm.core.ai.ollama.chat({
@@ -531,7 +527,7 @@ echo 'hello
 Output the raw shell command only:`;
 
   try {
-    const computing = startComputing('Generating');
+    const computing = spinner('Generating');
     const model = getDefaultModel();
     await ensureModel(model);
 
@@ -642,7 +638,7 @@ Output the raw shell command only:`;
         if (result.stderr) console.error(result.stderr);
 
         // Permission hints on macOS
-        handleMacOSPermissionError(result.stderr);
+        handleMacOSPermission(result.stderr);
       }
       if (result?.code !== 0) {
         process.stdout.write("\n> "); // Show prompt after error

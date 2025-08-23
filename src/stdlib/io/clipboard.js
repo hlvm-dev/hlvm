@@ -1,7 +1,6 @@
 // Clipboard module - Cross-platform clipboard operations
 
-import { platformCommand, PowerShellTemplates, checkSuccess, initializeDocs } from "../core/utils.js";
-import { execCommand } from "../core/resource.js";
+import { platformCommand, PowerShellTemplates, checkSuccess, initDocs } from "../core/utils.js";
 
 /**
  * Reads text from system clipboard
@@ -34,39 +33,17 @@ export async function read() {
  * // → Text copied to clipboard
  */
 export async function write(text) {
-  // Darwin uses stdin
-  if (globalThis.Deno.build.os === "darwin") {
-    const result = await execCommand("pbcopy", [], { stdin: "piped", input: text });
-    checkSuccess(result, "Clipboard write");
-    return;
-  }
+  const result = await platformCommand({
+    darwin: { cmd: "pbcopy", args: [], stdin: "piped", input: text },
+    windows: { script: PowerShellTemplates.setClipboard(text) },
+    linux: [
+      { cmd: "xclip", args: ["-selection", "clipboard"], stdin: "piped", input: text },
+      { cmd: "xsel", args: ["--clipboard", "--input"], stdin: "piped", input: text },
+      { cmd: "wl-copy", args: [], stdin: "piped", input: text }
+    ]
+  });
   
-  // Windows uses PowerShell
-  if (globalThis.Deno.build.os === "windows") {
-    const result = await platformCommand({
-      windows: { script: PowerShellTemplates.setClipboard(text) }
-    });
-    checkSuccess(result, "Clipboard write");
-    return;
-  }
-  
-  // Linux tries multiple tools with stdin
-  const tools = [
-    { cmd: "xclip", args: ["-selection", "clipboard"] },
-    { cmd: "xsel", args: ["--clipboard", "--input"] },
-    { cmd: "wl-copy", args: [] }
-  ];
-  
-  for (const tool of tools) {
-    try {
-      const result = await execCommand(tool.cmd, tool.args, { stdin: "piped", input: text });
-      if (result.success) return;
-    } catch {
-      // Try next tool
-    }
-  }
-  
-  throw new Error("Clipboard write failed. Install one of: xclip, xsel, or wl-clipboard");
+  checkSuccess(result, "Clipboard write");
 }
 
 /**
@@ -100,7 +77,7 @@ export async function isAvailable() {
 }
 
 // Initialize docs on module load
-initializeDocs({ read, write, isAvailable }, {
+initDocs({ read, write, isAvailable }, {
   read: `read()
 Reads text from system clipboard
 Returns: clipboard text content`,
